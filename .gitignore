@@ -4,6 +4,6 @@ app/amy_memory.db
 *.sqlite
 *.db
 *.log
-*.txt
+llm_request_log.txt
 *.pyc
 __pycache__/

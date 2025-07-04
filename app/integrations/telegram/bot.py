@@ -163,7 +163,10 @@ def main() -> None:
     logger.info("main: TELEGRAM_BOT_TOKEN found.")
 
     # Set up DatabaseSessionService
-    db_url = "sqlite:///./app/amy_memory.db"
+    # Construct an absolute path to the database file
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    db_path = os.path.join(project_root, "app", "amy_memory.db")
+    db_url = f"sqlite:///{db_path}"
     logger.info(f"main: Initializing DatabaseSessionService with db_url: {db_url}")
     session_service = DatabaseSessionService(db_url=db_url)
 

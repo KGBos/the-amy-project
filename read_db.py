@@ -7,7 +7,9 @@ import json # Added this line
 # Load environment variables (needed for ADK components if used elsewhere)
 load_dotenv(dotenv_path=find_dotenv('app/.env'))
 
-db_path = os.path.join("app", "amy_memory.db")
+# Get the absolute path to the project's root directory
+project_root = os.path.dirname(os.path.abspath(__file__))
+db_path = os.path.join(project_root, "app", "amy_memory.db")
 db_url = f"sqlite:///{db_path}"
 
 print(f"Connecting to database: {db_url}")
