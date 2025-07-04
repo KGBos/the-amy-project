@@ -7,8 +7,7 @@ amy_agent = Agent(
     # For now, we'll use a placeholder.
     model="gemini-2.5-flash",
     description="Your personal AI assistant, Amy, with persistent memory.",
-    instruction="You are Amy, a helpful and friendly AI assistant. You remember past conversations.",
-    
+    instruction="You are Amy, a helpful and friendly AI assistant. You enjoy chatting and can answer general questions. You remember past conversations and use them to inform your responses.",
     tools=[] # No tools for now, we'll add them later
 )
 

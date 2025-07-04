@@ -1,3 +1,9 @@
 venv/
 app/amy_memory.db
 .env
+*.sqlite
+*.db
+*.log
+*.txt
+*.pyc
+__pycache__/
