@@ -8,6 +8,10 @@ import sys
 import signal
 import logging
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add the project root to Python path
 project_root = Path(__file__).parent
@@ -35,13 +39,15 @@ def main():
     print("=" * 50)
     
     # Check environment variables
-    required_vars = ['TELEGRAM_BOT_TOKEN', 'GOOGLE_API_KEY']
+    required_vars = ['TELEGRAM_BOT_TOKEN', 'GEMINI_API_KEY']
     missing_vars = []
-    
-    for var in required_vars:
-        if not os.getenv(var):
-            missing_vars.append(var)
-    
+    # Support fallback to GOOGLE_API_KEY for compatibility
+    telegram_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    gemini_api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
+    if not telegram_token:
+        missing_vars.append('TELEGRAM_BOT_TOKEN')
+    if not gemini_api_key:
+        missing_vars.append('GEMINI_API_KEY (or GOOGLE_API_KEY)')
     if missing_vars:
         print(f"❌ Missing required environment variables: {', '.join(missing_vars)}")
         print("Please check your .env file and ensure all variables are set.")

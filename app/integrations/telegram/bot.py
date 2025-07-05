@@ -14,8 +14,11 @@ from app.features.memory import MemoryManager
 # Load environment variables
 load_dotenv()
 
-# Configure Google Generative AI
-genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+# Configure Gemini/Google Generative AI
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
+if not GEMINI_API_KEY:
+    raise ValueError("GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable is required")
+genai.configure(api_key=GEMINI_API_KEY)
 
 # Initialize the model
 model = genai.GenerativeModel('gemini-2.5-flash')
