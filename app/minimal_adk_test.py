@@ -1,5 +1,10 @@
-from dotenv import load_dotenv, find_dotenv
-load_dotenv(dotenv_path=find_dotenv('app/.env'))
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from the .env file in the project root
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+dotenv_path = os.path.join(project_root, '.env')
+load_dotenv(dotenv_path=dotenv_path)
 
 import asyncio
 from google.adk.agents import Agent

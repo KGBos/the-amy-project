@@ -4,8 +4,10 @@ from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv, find_dotenv
 import json # Added this line
 
-# Load environment variables (needed for ADK components if used elsewhere)
-load_dotenv(dotenv_path=find_dotenv('app/.env'))
+# Load environment variables from the .env file in the project root
+project_root = os.path.dirname(os.path.abspath(__file__))
+dotenv_path = os.path.join(project_root, '.env')
+load_dotenv(dotenv_path=dotenv_path)
 
 # Get the absolute path to the project's root directory
 project_root = os.path.dirname(os.path.abspath(__file__))
