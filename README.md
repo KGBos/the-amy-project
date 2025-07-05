@@ -4,13 +4,13 @@
 
 Amy is not merely a conversational AI; she is your **Proactive Digital Twin**, an intelligent entity deeply integrated into your life, anticipating needs, optimizing your time, and enhancing your capabilities across all domains. She operates with a profound understanding of your context, preferences, and goals, acting as your personal orchestrator of information and action.
 
-## Memory Architecture
+## 🧠 Memory Architecture
 
 Amy implements a robust three-tier memory system to ensure comprehensive recall and contextual awareness across all communication modes:
 
 ### **STM (Short-Term Memory)**
 - **Purpose**: Immediate conversation context for current interaction
-- **Storage**: In-memory conversation buffer (last 10-20 messages)
+- **Storage**: In-memory conversation buffer (last 20 messages)
 - **Access**: Instant, no database calls
 - **Scope**: Current session only
 
@@ -26,13 +26,13 @@ Amy implements a robust three-tier memory system to ensure comprehensive recall 
 
 ### **LTM (Long-Term Memory)**
 - **Purpose**: Semantic knowledge and contextual recall
-- **Storage**: Vector database (ChromaDB/FAISS) for semantic search
+- **Storage**: Vector database (JSON files in `instance/vector_db/`) for semantic search
 - **Access**: Intelligent retrieval based on conversation relevance
 - **Scope**: Key facts, preferences, relationships, and contextual knowledge
 - **Features**:
-  - Embeddings for similarity search
   - Automatic fact extraction and storage
   - Context-aware retrieval system
+  - Personal information learning
 
 ### **Memory Flow**
 1. **STM**: Immediate context for current conversation
@@ -46,7 +46,7 @@ Amy implements a robust three-tier memory system to ensure comprehensive recall 
 - **Intelligent Context**: System builds relevant context based on current conversation needs
 - **Privacy-First**: All data stored locally with user control
 
-## Setup and Usage
+## 🚀 Setup and Usage
 
 ### Initial Setup
 
@@ -66,103 +66,179 @@ Amy implements a robust three-tier memory system to ensure comprehensive recall 
     ```
 
 4.  **Configure Environment Variables:**
-    *   Copy the `.env.example` file (if it exists) to a new file named `.env`.
-    *   Fill in the required API keys and tokens in the `.env` file (e.g., `TELEGRAM_BOT_TOKEN`, Google API keys).
+    *   Copy the `.env.example` file to a new file named `.env`:
+    ```bash
+    cp .env.example .env
+    ```
+    *   Fill in the required API keys and tokens in the `.env` file:
+        - `GEMINI_API_KEY`: Get from [Google AI Studio](https://makersuite.google.com/app/apikey)
+        - `TELEGRAM_BOT_TOKEN`: Get from [@BotFather](https://t.me/botfather) on Telegram
 
 5.  **Initialize the Database:**
-    *   Run the initialization script once to create the database schema in the `instance/` directory.
     ```bash
     python3 init_db.py
     ```
 
-### Running the Bot
+### Running Amy
 
-*   **Telegram Bot:**
-    *   To start the Telegram bot, simply run the launcher script:
-    ```bash
-    ./start_telegram.sh
-    ```
+#### **Telegram Bot (Recommended)**
+```bash
+python3 run_amy_bot.py
+```
+- Amy will start and connect to your Telegram bot
+- Send messages to your bot to interact with Amy
+- Use `/start`, `/help`, and `/memory` commands
+- All conversations are permanently stored and cross-platform accessible
 
-*   **Web UI for Testing:**
-    *   To test the agent through a web interface, run the web launcher script:
-    ```bash
-    ./start_web.sh
-    ```
-    *   This will provide a URL (usually `http://localhost:8000`) to access the chat interface in your browser. The web UI shares the same database (`instance/amy_memory.db`) as the Telegram bot.
+#### **Web UI for Testing**
+```bash
+./start_web.sh
+```
+- Provides a web interface at `http://localhost:8000`
+- Shares the same memory system as the Telegram bot
+- Good for development and testing
 
-### Development Tools
+### 🛠️ Development Tools
 
-*   **Quick Setup:**
-    ```bash
-    ./setup_dev.sh
-    ```
-    *   Automatically sets up the virtual environment, installs dependencies, and initializes the database.
+#### **Quick Setup**
+```bash
+./setup_dev.sh
+```
+- Automatically sets up the virtual environment, installs dependencies, and initializes the database.
 
-*   **Health Check:**
-    ```bash
-    python3 health_check.py
-    ```
-    *   Verifies that all components are properly configured and working.
+#### **Health Check**
+```bash
+python3 health_check.py
+```
+- Verifies that all components are properly configured and working.
 
-*   **View Sessions:**
-    ```bash
-    python3 view_sessions.py
-    ```
-    *   Displays all conversation sessions and their history from the database.
+#### **Memory Management**
+```bash
+python3 manage_memory.py
+```
+- Interactive tool to backup, reset, or restore conversation memory.
 
-*   **Manage Memory:**
-    ```bash
-    python3 manage_memory.py
-    ```
-    *   Interactive tool to backup, reset, or restore conversation memory.
+#### **Memory Reset (Complete Clean Start)**
+```bash
+python3 reset_amy_memory.py
+```
+- Completely resets Amy's memory system
+- Removes all conversations, facts, and test data
+- Use when you want Amy to start fresh
 
-**Core Capabilities & Features:**
+#### **View Sessions**
+```bash
+python3 view_sessions.py
+```
+- Displays all conversation sessions and their history from the database.
 
-1.  **Hyper-Contextual Awareness (Beyond Basic Memory):**
-    *   **Omni-Modal Perception:** Amy continuously processes and understands your environment through all available modalities:
-        *   **Voice:** Not just transcription, but tone, emotion, and intent. She understands interruptions, overlapping speech, and even whispers.
-        *   **Vision:** Through wearable cameras or smart home devices, she understands your physical surroundings, activities, and even your emotional state from facial cues.
-        *   **Text:** Seamlessly ingests all your digital communications (emails, chats, documents, web browsing history) with privacy-preserving, on-device processing where possible.
-    *   **Deep Personal Knowledge Graph (LTM):** Beyond simple chat history, Amy builds a dynamic, evolving knowledge graph of your life:
-        *   **Relationships:** Who are your friends, family, colleagues, and what are their roles/preferences?
-        *   **Preferences:** Your likes, dislikes, habits, routines, dietary restrictions, preferred communication styles.
-        *   **Goals & Projects:** Your long-term aspirations, current tasks, and project statuses, cross-referencing across all your digital tools.
-        *   **Contextual Reasoning:** She understands the *why* behind your actions and requests, not just the *what*.
+#### **Test Suite**
+```bash
+python3 test_suite.py
+```
+- Comprehensive test suite for the memory system
+- Tests STM, MTM, LTM, and integration features
 
-2.  **Proactive Anticipation & Action:**
-    *   **Predictive Assistance:** Amy doesn't wait for commands. She anticipates your next need based on context, time, location, and your historical patterns.
-        *   *Example:* "Amy, I'm leaving the office now." Amy responds: "Traffic looks heavy on your usual route. I've already rerouted your navigation, sent an ETA update to your family, and pre-heated your oven for dinner."
-    *   **Goal-Oriented Orchestration:** You state a high-level goal ("Plan my trip to Japan next spring"), and Amy breaks it down into sub-tasks, researches, books, schedules, and manages all necessary communications, presenting you with options and handling execution.
-    *   **Intelligent Delegation:** She identifies tasks you'd rather delegate (e.g., scheduling, routine emails, data entry) and executes them autonomously, only seeking your approval for critical decisions.
+### 📊 Memory Commands
 
-3.  **Seamless Integration & Control:**
-    *   **Universal Digital Interface:** Amy is the single interface to all your digital services (calendar, email, tasks, smart home, financial apps, social media, productivity suites). You interact with Amy, and she interacts with the underlying services.
-    *   **Physical World Interaction:** Through IoT and robotics, she can interact with your physical environment (e.g., "Amy, dim the lights and play my 'focus' playlist," or "Amy, order groceries based on our meal plan and current inventory").
-    *   **Granular Privacy & Control:** You have absolute, transparent control over what Amy perceives, remembers, and acts upon. Fine-grained permissions for data access and action execution.
+#### **Telegram Bot Commands**
+- `/start` - Initialize conversation with Amy
+- `/help` - Show available commands
+- `/memory` - Display memory statistics
 
-4.  **Continuous Learning & Adaptation:**
-    *   **Reinforcement Learning:** Amy learns from your feedback, corrections, and implicit preferences, constantly refining her understanding and proactive behaviors.
-    *   **Self-Correction:** She identifies and corrects her own mistakes, learning from failures.
-    *   **Skill Acquisition:** As new APIs or capabilities become available, Amy can learn to integrate and utilize them, expanding her own skillset.
+#### **Memory Statistics**
+The `/memory` command shows:
+- Active sessions in STM
+- Total conversations in MTM
+- Facts stored in LTM by type
+- Cross-platform session counts
 
-5.  **Multimodal Communication & Embodiment:**
-    *   **Natural Language Fluency:** Flawless, context-aware conversation across all languages you speak.
-    *   **Emotional Intelligence:** She understands and responds to your emotional state, adapting her communication style accordingly.
-    *   **Voice & Visual Consistency:** A consistent voice and (optional) visual avatar that evolves with your preferences, providing a comforting and familiar presence.
+## 🔧 Configuration
 
-## Roadmap
+### Environment Variables
+```bash
+# Required
+GEMINI_API_KEY=your_gemini_api_key_here
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+```
+
+### Database Paths
+- **MTM Database**: `instance/amy_memory.db`
+- **LTM Vector DB**: `instance/vector_db/`
+- **Logs**: `instance/amy_telegram_bot.log`
+
+## 📁 Project Structure
+
+```
+app/
+├── core/amy_agent/          # Amy's core agent definition
+├── features/memory/         # Memory system (STM, MTM, LTM)
+└── integrations/telegram/   # Telegram bot integration
+
+# Management Scripts
+run_amy_bot.py              # Main bot launcher
+reset_amy_memory.py         # Complete memory reset
+manage_memory.py            # Memory management tool
+test_suite.py               # Comprehensive test suite
+
+# Documentation
+MEMORY_SYSTEM.md            # Detailed memory system docs
+AMY_ISSUES.md              # Known issues and improvements
+GEMINI.md                  # Gemini API integration guide
+```
+
+## 🧪 Testing
+
+### Comprehensive Test Suite
+The `test_suite.py` runs 9 different test categories:
+
+1. **STM Tests**: Message storage, retrieval, and session management
+2. **MTM Tests**: Conversation storage, database operations
+3. **LTM Tests**: Fact storage, retrieval, and search
+4. **Memory Manager Tests**: Integration between all systems
+5. **Telegram Integration Tests**: Bot conversation simulation
+6. **Cross-Platform Tests**: Multi-platform session handling
+7. **Memory Statistics Tests**: System health and metrics
+8. **Search Tests**: Content search across all systems
+9. **Context Building Tests**: AI response context generation
+
+### Running Tests
+```bash
+# Run all tests
+python3 test_suite.py
+
+# Run specific test (modify test_suite.py)
+python3 -c "
+from test_suite import TestSuite
+ts = TestSuite()
+ts.test_telegram_integration()
+"
+```
+
+## 🎯 Current Status
+
+**Phase 0: Foundation (Current State) ✅**
+*   **Goal:** Establish a stable, text-based conversational agent with comprehensive memory.
+*   **Key Features Achieved:**
+    *   ✅ Complete three-tier memory system (STM, MTM, LTM)
+    *   ✅ Telegram bot integration with persistent memory
+    *   ✅ Cross-platform conversation storage
+    *   ✅ Automatic fact extraction and learning
+    *   ✅ Memory management and reset tools
+    *   ✅ Comprehensive test suite
+    *   ✅ Local persistent memory using SQLite
+    *   ✅ Text-based interaction with `gemini-2.5-flash`
+
+## 🚧 Known Issues
+
+See `AMY_ISSUES.md` for a complete list of known issues and improvements needed. Key areas include:
+- Context building optimization
+- Memory command functionality
+- Conversation flow improvements
+
+## 📈 Roadmap
 
 **Overall Goal:** To build a personal AI agent that understands context, anticipates needs, and acts proactively across various domains, leveraging ADK's capabilities and external integrations.
-
----
-
-**Phase 0: Foundation (Current State)**
-*   **Goal:** Establish a stable, text-based conversational agent with basic persistence.
-*   **Key Features Achieved:**
-    *   Basic ADK agent setup (`amy_agent`).
-    *   Local persistent memory using SQLite (`amy_memory.db`).
-    *   Basic text-based interaction with `gemini-2.5-flash`.
-    *   Proper project structure and Git repository.
 
 ---
 
@@ -178,11 +254,7 @@ Amy implements a robust three-tier memory system to ensure comprehensive recall 
         *   Implement a Python function to fetch weather data for a given location.
         *   Integrate this as an ADK tool for Amy.
         *   Update Amy's instructions to use this tool when asked about weather.
-    3.  **Basic Long-Term Memory (LTM) - Summarization/Key Facts:**
-        *   Implement a mechanism to periodically summarize key facts or decisions from the `DatabaseSessionService` history.
-        *   Store these summaries in a simple, searchable format (e.g., a separate table in `amy_memory.db` or a text file).
-        *   Develop a basic retrieval tool for Amy to access these summaries when relevant.
-    4.  **Improved Error Handling & User Feedback:**
+    3.  **Improved Error Handling & User Feedback:**
         *   Enhance Amy's responses when she encounters limitations or errors (e.g., "I can't find the weather for that location," or "I don't have access to that information yet").
 
 ---
@@ -239,3 +311,11 @@ Amy implements a robust three-tier memory system to ensure comprehensive recall 
         *   Integrate sentiment analysis or tone detection (from voice/text input) to allow Amy to adapt her communication style.
     4.  **Complex Workflow Orchestration:**
         *   Utilize ADK's `WorkflowAgent` and `ParallelAgent` to manage multi-step, complex tasks autonomously.
+
+## 🤝 Contributing
+
+This is a personal project, but feedback and suggestions are welcome! The codebase is designed to be extensible and well-documented.
+
+## 📄 License
+
+This project is for personal use and development.
