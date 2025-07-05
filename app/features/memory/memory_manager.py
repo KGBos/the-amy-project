@@ -1,6 +1,6 @@
 """
 Memory Manager for Amy
-Orchestrates STM, MTM, and LTM systems and provides unified interface
+Orchestrates STM, EpTM, and LTM systems and provides unified interface
 """
 
 from typing import Dict, List, Optional, Any
@@ -10,28 +10,28 @@ import os
 import json
 
 from .stm import ShortTermMemory
-from .mtm import MediumTermMemory
 from .ltm import LongTermMemory
 
 logger = logging.getLogger(__name__)
 
 class MemoryManager:
     """
-    Unified memory manager that coordinates STM, MTM, and LTM systems.
+    Unified memory manager that coordinates STM, EpTM, and LTM systems.
     Provides a single interface for all memory operations.
     """
     
     def __init__(self, db_path: str = "instance/amy_memory.db", vector_db_path: str = "instance/vector_db"):
         """
-        Initialize the memory manager with all three memory systems.
+        Initialize the memory manager with memory systems.
         
         Args:
-            db_path: Path to the SQLite database for MTM
+            db_path: Path to the SQLite database for EpTM (coming soon)
             vector_db_path: Path to the vector database for LTM
         """
         self.stm = ShortTermMemory()
-        self.mtm = MediumTermMemory(db_path)
         self.ltm = LongTermMemory(vector_db_path)
+        # TODO: Add EpTM when implemented
+        # self.episodic = EpisodicMemory(db_path)
         
     def process_message(self, session_id: str, platform: str, role: str, content: str, 
                        user_id: Optional[str] = None, username: Optional[str] = None) -> None:
@@ -51,10 +51,8 @@ class MemoryManager:
         # Add to STM (immediate context)
         self.stm.add_message(session_id, role, content, timestamp)
         
-        # Add to MTM (permanent storage)
-        # Get or create conversation
-        conversation_id = self._get_or_create_conversation(session_id, platform, user_id, username)
-        self.mtm.add_message(conversation_id, role, content, timestamp)
+        # TODO: Add to EpTM when implemented
+        # self.episodic.add_message(session_id, role, content, timestamp)
         
         # Extract facts for LTM (if user message)
         if role == 'user':
@@ -70,7 +68,7 @@ class MemoryManager:
                 except Exception as e:
                     logger.warning(f"Failed to process fact '{fact}': {e}")
                 
-        logger.info(f"Processed message through all memory systems: {session_id} - {role}")
+        logger.info(f"Processed message through memory systems: {session_id} - {role}")
         
     def get_context_for_query(self, session_id: str, query: str) -> str:
         """
@@ -95,6 +93,12 @@ class MemoryManager:
                 context_parts.append(f"{role}: {content}")
             context_parts.append("")
             
+        # TODO: Get EpTM context when implemented
+        # episodic_context = self.episodic.get_context(session_id, query)
+        # if episodic_context:
+        #     context_parts.append(episodic_context)
+        #     context_parts.append("")
+            
         # Get LTM context (relevant facts)
         ltm_context = self.ltm.build_context_from_query(query)
         if ltm_context:
@@ -113,7 +117,9 @@ class MemoryManager:
         Returns:
             List of matching conversations
         """
-        return self.mtm.search_conversations(query)
+        # TODO: Implement when EpTM is ready
+        logger.warning("Conversation search not yet implemented - EpTM coming soon")
+        return []
         
     def get_all_sessions(self) -> List[Dict]:
         """
@@ -122,7 +128,9 @@ class MemoryManager:
         Returns:
             List of session information
         """
-        return self.mtm.get_all_sessions()
+        # TODO: Implement when EpTM is ready
+        logger.warning("Session listing not yet implemented - EpTM coming soon")
+        return []
         
     def get_session_messages(self, session_id: str) -> List[Dict]:
         """
@@ -134,29 +142,13 @@ class MemoryManager:
         Returns:
             List of messages
         """
-        return self.mtm.get_conversation_messages(session_id)
-        
-    def _get_or_create_conversation(self, session_id: str, platform: str, 
-                                   user_id: Optional[str] = None, username: Optional[str] = None) -> int:
-        """
-        Get existing conversation or create new one.
-        
-        Args:
-            session_id: Session identifier
-            platform: Platform name
-            user_id: User identifier
-            username: Username
-            
-        Returns:
-            Conversation ID
-        """
-        # For now, create a new conversation each time
-        # In the future, this should check for existing conversations
-        return self.mtm.add_conversation(session_id, platform, user_id, username)
+        # TODO: Implement when EpTM is ready
+        logger.warning("Session messages not yet implemented - EpTM coming soon")
+        return []
         
     def clear_session(self, session_id: str) -> None:
         """
-        Clear a session from STM (MTM and LTM are permanent).
+        Clear a session from STM (EpTM and LTM are permanent).
         
         Args:
             session_id: Session to clear
@@ -175,8 +167,8 @@ class MemoryManager:
             'stm': {
                 'active_sessions': len(self.stm.get_all_sessions())
             },
-            'mtm': {
-                'total_sessions': len(self.mtm.get_all_sessions())
+            'episodic': {
+                'total_sessions': 0  # TODO: Implement when EpTM is ready
             },
             'ltm': {
                 'fact_types': self._get_ltm_fact_types()
@@ -194,15 +186,16 @@ class MemoryManager:
         """
         fact_types = {}
         
-        for filename in os.listdir(self.ltm.vector_db_path):
-            if filename.endswith('.json'):
-                fact_file = os.path.join(self.ltm.vector_db_path, filename)
-                try:
-                    with open(fact_file, 'r') as f:
-                        fact_data = json.load(f)
-                        fact_type = fact_data.get('type', 'unknown')
-                        fact_types[fact_type] = fact_types.get(fact_type, 0) + 1
-                except Exception:
-                    continue
+        if os.path.exists(self.ltm.vector_db_path):
+            for filename in os.listdir(self.ltm.vector_db_path):
+                if filename.endswith('.json'):
+                    fact_file = os.path.join(self.ltm.vector_db_path, filename)
+                    try:
+                        with open(fact_file, 'r') as f:
+                            fact_data = json.load(f)
+                            fact_type = fact_data.get('type', 'unknown')
+                            fact_types[fact_type] = fact_types.get(fact_type, 0) + 1
+                    except Exception:
+                        continue
                     
         return fact_types 

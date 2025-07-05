@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
 Memory System Demo for Amy
-Comprehensive demonstration of how the memory system works
+Demonstrates the memory system functionality with interactive examples
 """
 
+import os
+import sys
 import time
 import json
 import os
@@ -12,412 +14,374 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 import logging
 
-# Add parent directory to path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+# Add project root to path
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, project_root)
 
-# Set up logging
-logging.basicConfig(level=logging.DEBUG)
+from app.features.memory import MemoryManager
+
 logger = logging.getLogger(__name__)
 
 class MemoryDemo:
     """
-    Comprehensive demonstration of Amy's memory system.
-    Shows step-by-step how memory operations work.
+    Interactive demo of Amy's memory system.
+    Shows how messages flow through different memory layers.
     """
     
     def __init__(self):
+        """Initialize the memory demo."""
+        self.memory_manager = MemoryManager()
         self.demo_log = []
         
-    def log_demo_step(self, step: str, details: Dict[str, Any]) -> None:
-        """Log a demo step."""
+    def log_demo_step(self, step: str, data: Dict[str, Any]) -> None:
+        """
+        Log a demo step.
+        
+        Args:
+            step: Step name
+            data: Step data
+        """
         log_entry = {
             'timestamp': datetime.now().isoformat(),
             'step': step,
-            'details': details
+            'data': data
         }
         self.demo_log.append(log_entry)
-        print(f"📝 {step}: {details}")
         
-    def run_complete_demo(self):
-        """Run a complete demonstration of the memory system."""
-        print("🧠 AMY MEMORY SYSTEM DEMO")
-        print("=" * 60)
-        print("This demo will show you exactly how the memory system works!")
-        print("=" * 60)
-        print()
+    def demo_basic_memory_flow(self) -> str:
+        """Demonstrate basic memory flow."""
+        print("\n🔄 BASIC MEMORY FLOW DEMO")
+        print("=" * 50)
         
-        # Step 1: Initialize memory systems
-        self.demo_step_1_initialization()
+        session_id = f"demo_session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        platform = "demo"
+        user_message = "Hi Amy, my name is John and I love programming in Python!"
         
-        # Step 2: Process a user message
-        self.demo_step_2_process_user_message()
+        print(f"Session ID: {session_id}")
+        print(f"Platform: {platform}")
+        print(f"User Message: {user_message}")
         
-        # Step 3: Show context building
-        self.demo_step_3_context_building()
+        # Step 1: Process user message
+        print("\n📝 Step 1: Processing user message...")
+        self.memory_manager.process_message(
+            session_id=session_id,
+            platform=platform,
+            role="user",
+            content=user_message,
+            user_id="demo_user",
+            username="john_doe"
+        )
         
-        # Step 4: Process AI response
-        self.demo_step_4_process_ai_response()
+        # Get system info
+        system_info = {
+            'session_id': session_id,
+            'platform': platform,
+            'user_message': user_message,
+            'timestamp': datetime.now().isoformat()
+        }
         
-        # Step 5: Show memory inspection
-        self.demo_step_5_memory_inspection()
+        print("   ✅ User message processed through memory systems")
+        self.log_demo_step("User Message Processing", system_info)
         
-        # Step 6: Show cross-platform memory
-        self.demo_step_6_cross_platform()
+        # Step 2: Simulate AI response
+        ai_response = "Hi John! Nice to meet you. I can see you're passionate about Python programming. How can I help you today?"
         
-        print("\n" + "=" * 60)
-        print("✅ DEMO COMPLETE!")
-        print("=" * 60)
+        print(f"\n🤖 Step 2: Processing AI response...")
+        print(f"AI Response: {ai_response}")
         
-    def demo_step_1_initialization(self):
-        """Step 1: Initialize memory systems."""
-        print("🔧 STEP 1: MEMORY SYSTEM INITIALIZATION")
-        print("-" * 40)
+        self.memory_manager.process_message(
+            session_id=session_id,
+            platform=platform,
+            role="model",
+            content=ai_response,
+            user_id="demo_user",
+            username="john_doe"
+        )
         
-        try:
-            from app.features.memory import MemoryManager
-            memory_manager = MemoryManager()
-            
-            self.log_demo_step("Memory Manager Initialized", {
-                'stm_max_messages': memory_manager.stm.max_messages,
-                'mtm_db_path': memory_manager.mtm.db_path,
-                'ltm_vector_db_path': memory_manager.ltm.vector_db_path
-            })
-            
-            print("✅ Memory systems initialized successfully!")
-            print("   • STM: In-memory buffer (20 messages max)")
-            print("   • MTM: SQLite database (permanent storage)")
-            print("   • LTM: Vector database (semantic storage)")
-            print()
-            
-        except Exception as e:
-            print(f"❌ Error initializing memory systems: {e}")
-            print()
+        print("   ✅ AI response processed through memory systems")
+        self.log_demo_step("AI Response Processing", {
+            'ai_response': ai_response,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+        # Step 3: Test context building
+        print(f"\n🧠 Step 3: Testing context building...")
+        context = self.memory_manager.get_context_for_query(session_id, "What do you know about John?")
+        
+        print("   ✅ Context built successfully")
+        print(f"   📄 Context length: {len(context) if context else 0} characters")
+        
+        self.log_demo_step("Context Building", {
+            'context_length': len(context) if context else 0,
+            'context_preview': context[:200] + "..." if context and len(context) > 200 else context
+        })
+        
+        # Step 4: Show memory stats
+        print(f"\n📊 Step 4: Memory statistics...")
+        stats = self.memory_manager.get_memory_stats()
+        
+        print(f"   📝 STM Active Sessions: {stats['stm']['active_sessions']}")
+        print(f"   🧠 LTM Fact Types: {len(stats['ltm']['fact_types'])}")
+        
+        self.log_demo_step("Memory Statistics", stats)
+        
+        print(f"\n✅ Basic memory flow demo completed!")
+        return session_id
     
-    def demo_step_2_process_user_message(self):
-        """Step 2: Process a user message through all memory systems."""
-        print("📥 STEP 2: PROCESSING USER MESSAGE")
-        print("-" * 40)
+    def demo_cross_platform_memory(self) -> List[str]:
+        """Demonstrate cross-platform memory functionality."""
+        print("\n🌐 CROSS-PLATFORM MEMORY DEMO")
+        print("=" * 50)
         
-        try:
-            from app.features.memory import MemoryManager
-            memory_manager = MemoryManager()
+        platforms = ["telegram", "web", "voice"]
+        session_ids = []
+        
+        for i, platform in enumerate(platforms, 1):
+            session_id = f"cross_platform_demo_{platform}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            message = f"This is a test message from {platform} platform"
             
-            # Simulate a user message
-            session_id = "demo_session_001"
-            platform = "telegram"
-            user_message = "Hi Amy! My name is John and I love programming in Python."
+            print(f"\n📱 Platform {i}: {platform}")
+            print(f"   Session ID: {session_id}")
+            print(f"   Message: {message}")
             
-            print(f"User Message: '{user_message}'")
-            print(f"Session ID: {session_id}")
-            print(f"Platform: {platform}")
-            print()
+            self.memory_manager.process_message(
+                session_id=session_id,
+                platform=platform,
+                role="user",
+                content=message,
+                user_id=f"user_{platform}",
+                username=f"testuser_{platform}"
+            )
             
-            # Process through STM
-            print("📝 Processing through STM...")
-            memory_manager.stm.add_message(session_id, "user", user_message)
-            stm_context = memory_manager.stm.get_context(session_id)
-            self.log_demo_step("STM Processing", {
+            session_ids.append(session_id)
+            print(f"   ✅ Message processed")
+            
+            self.log_demo_step("Cross-Platform Processing", {
+                'platform': platform,
                 'session_id': session_id,
-                'message_count': len(stm_context),
-                'latest_message': stm_context[-1] if stm_context else None
+                'message': message
             })
-            print(f"   ✅ STM: {len(stm_context)} messages in session")
-            
-            # Process through MTM
-            print("💾 Processing through MTM...")
-            conversation_id = memory_manager.mtm.add_conversation(session_id, platform, "user123", "john_doe")
-            memory_manager.mtm.add_message(conversation_id, "user", user_message)
-            self.log_demo_step("MTM Processing", {
-                'conversation_id': conversation_id,
-                'session_id': session_id,
-                'platform': platform
-            })
-            print(f"   ✅ MTM: Message stored in conversation {conversation_id}")
-            
-            # Process through LTM
-            print("🧠 Processing through LTM...")
-            facts = memory_manager.ltm.extract_facts_from_conversation([{'role': 'user', 'content': user_message}])
-            stored_facts = []
-            
-            for fact in facts:
-                if ': ' in fact:
-                    fact_type, fact_content = fact.split(': ', 1)
-                    memory_manager.ltm.store_fact(fact_type, fact_content)
-                    stored_facts.append({'type': fact_type, 'content': fact_content})
-                else:
-                    memory_manager.ltm.store_fact('general', fact)
-                    stored_facts.append({'type': 'general', 'content': fact})
-            
-            self.log_demo_step("LTM Processing", {
-                'extracted_facts': facts,
-                'stored_facts': stored_facts
-            })
-            print(f"   ✅ LTM: {len(stored_facts)} facts extracted and stored")
-            
-            print()
-            
-        except Exception as e:
-            print(f"❌ Error processing user message: {e}")
-            print()
+        
+        # Test that all platforms are handled
+        stats = self.memory_manager.get_memory_stats()
+        print(f"\n📊 Cross-platform summary:")
+        print(f"   Total active sessions: {stats['stm']['active_sessions']}")
+        print(f"   Platforms tested: {', '.join(platforms)}")
+        
+        print(f"\n✅ Cross-platform memory demo completed!")
+        return session_ids
     
-    def demo_step_3_context_building(self):
-        """Step 3: Show how context is built for AI responses."""
-        print("🔍 STEP 3: CONTEXT BUILDING")
-        print("-" * 40)
+    def demo_fact_extraction(self) -> str:
+        """Demonstrate fact extraction and storage."""
+        print("\n🧠 FACT EXTRACTION DEMO")
+        print("=" * 50)
         
-        try:
-            from app.features.memory import MemoryManager
-            memory_manager = MemoryManager()
-            
-            session_id = "demo_session_001"
-            query = "What do you know about me?"
-            
-            print(f"Building context for query: '{query}'")
-            print(f"Session ID: {session_id}")
-            print()
-            
-            # Get STM context
-            print("📝 Retrieving STM context...")
-            stm_context = memory_manager.stm.get_context(session_id)
-            stm_messages = stm_context[-5:] if stm_context else []  # Last 5 messages
-            self.log_demo_step("STM Context Retrieved", {
-                'message_count': len(stm_messages),
-                'messages': stm_messages
-            })
-            print(f"   ✅ STM: {len(stm_messages)} recent messages")
-            
-            # Get LTM context
-            print("🧠 Retrieving LTM context...")
-            ltm_context = memory_manager.ltm.build_context_from_query(query)
-            self.log_demo_step("LTM Context Retrieved", {
-                'context': ltm_context,
-                'context_length': len(ltm_context) if ltm_context else 0
-            })
-            print(f"   ✅ LTM: {len(ltm_context) if ltm_context else 0} characters of relevant facts")
-            
-            # Build final context
-            print("🔗 Combining context...")
-            final_context = memory_manager.get_context_for_query(session_id, query)
-            self.log_demo_step("Final Context Built", {
-                'context': final_context,
-                'context_length': len(final_context) if final_context else 0
-            })
-            print(f"   ✅ Final context: {len(final_context) if final_context else 0} characters")
-            
-            if final_context:
-                print("\n📋 Final Context Preview:")
-                print("-" * 30)
-                print(final_context[:200] + "..." if len(final_context) > 200 else final_context)
-                print("-" * 30)
-            
-            print()
-            
-        except Exception as e:
-            print(f"❌ Error building context: {e}")
-            print()
-    
-    def demo_step_4_process_ai_response(self):
-        """Step 4: Process an AI response through memory systems."""
-        print("🤖 STEP 4: PROCESSING AI RESPONSE")
-        print("-" * 40)
+        session_id = f"fact_demo_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        try:
-            from app.features.memory import MemoryManager
-            memory_manager = MemoryManager()
+        # Test messages with different types of facts
+        test_messages = [
+            "My name is Alice and I work as a software engineer",
+            "I love coffee and hiking on weekends",
+            "My favorite programming language is JavaScript",
+            "I live in San Francisco and work at a tech startup"
+        ]
+        
+        for i, message in enumerate(test_messages, 1):
+            print(f"\n📝 Message {i}: {message}")
             
-            session_id = "demo_session_001"
-            ai_response = "Hi John! Nice to meet you! I remember you love programming in Python. That's a great skill to have!"
+            self.memory_manager.process_message(
+                session_id=session_id,
+                platform="demo",
+                role="user",
+                content=message,
+                user_id="alice_user",
+                username="alice"
+            )
             
-            print(f"AI Response: '{ai_response}'")
-            print(f"Session ID: {session_id}")
-            print()
+            print(f"   ✅ Message processed and facts extracted")
             
-            # Process through STM
-            print("📝 Processing AI response through STM...")
-            memory_manager.stm.add_message(session_id, "model", ai_response)
-            stm_context = memory_manager.stm.get_context(session_id)
-            self.log_demo_step("AI Response STM Processing", {
-                'session_id': session_id,
-                'message_count': len(stm_context),
-                'latest_message': stm_context[-1] if stm_context else None
-            })
-            print(f"   ✅ STM: {len(stm_context)} messages in session")
-            
-            # Process through MTM
-            print("💾 Processing AI response through MTM...")
-            # Get existing conversation
-            import sqlite3
-            with sqlite3.connect(memory_manager.mtm.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT id FROM conversations WHERE session_id = ?", (session_id,))
-                conversation_id = cursor.fetchone()[0]
-            
-            memory_manager.mtm.add_message(conversation_id, "model", ai_response)
-            self.log_demo_step("AI Response MTM Processing", {
-                'conversation_id': conversation_id,
+            self.log_demo_step("Fact Extraction", {
+                'message_number': i,
+                'message': message,
                 'session_id': session_id
             })
-            print(f"   ✅ MTM: AI response stored in conversation {conversation_id}")
-            
-            # Note: No LTM processing for model messages
-            print("🧠 No LTM processing for AI responses (model messages)")
-            print("   ℹ️  Only user messages trigger fact extraction")
-            
-            print()
-            
-        except Exception as e:
-            print(f"❌ Error processing AI response: {e}")
-            print()
+        
+        # Show extracted facts
+        print(f"\n📊 Extracted facts summary:")
+        stats = self.memory_manager.get_memory_stats()
+        fact_types = stats['ltm']['fact_types']
+        
+        for fact_type, count in fact_types.items():
+            print(f"   • {fact_type}: {count} facts")
+        
+        print(f"\n✅ Fact extraction demo completed!")
+        return session_id
     
-    def demo_step_5_memory_inspection(self):
-        """Step 5: Inspect the current state of all memory systems."""
-        print("🔍 STEP 5: MEMORY SYSTEM INSPECTION")
-        print("-" * 40)
+    def demo_context_building(self) -> str:
+        """Demonstrate context building for different queries."""
+        print("\n🔍 CONTEXT BUILDING DEMO")
+        print("=" * 50)
+        
+        session_id = f"context_demo_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # Build a conversation with specific details
+        conversation = [
+            ("user", "Hi Amy, I'm Bob"),
+            ("model", "Hi Bob! Nice to meet you!"),
+            ("user", "I'm a data scientist at Google"),
+            ("model", "That's fascinating! Data science is a great field."),
+            ("user", "I specialize in machine learning and Python"),
+            ("model", "Machine learning and Python are a powerful combination!"),
+            ("user", "I also love playing guitar and hiking"),
+            ("model", "Great hobbies! Music and nature are wonderful.")
+        ]
+        
+        print("📝 Building conversation...")
+        for role, content in conversation:
+            self.memory_manager.process_message(
+                session_id=session_id,
+                platform="demo",
+                role=role,
+                content=content,
+                user_id="bob_user",
+                username="bob"
+            )
+        
+        print("   ✅ Conversation built")
+        
+        # Test different queries
+        test_queries = [
+            "What do you know about Bob?",
+            "Tell me about Bob's work",
+            "What are Bob's hobbies?",
+            "What does Bob do for a living?"
+        ]
+        
+        print(f"\n🔍 Testing context building for different queries:")
+        
+        for query in test_queries:
+            print(f"\n   Query: {query}")
+            context = self.memory_manager.get_context_for_query(session_id, query)
+            
+            if context:
+                print(f"   ✅ Context built ({len(context)} characters)")
+                print(f"   📄 Preview: {context[:100]}...")
+            else:
+                print(f"   ⚠️  No context built")
+            
+            self.log_demo_step("Context Building Test", {
+                'query': query,
+                'context_length': len(context) if context else 0,
+                'context_preview': context[:200] + "..." if context and len(context) > 200 else context
+            })
+        
+        print(f"\n✅ Context building demo completed!")
+        return session_id
+    
+    def demo_memory_cleanup(self, session_ids: List[str]) -> None:
+        """Demonstrate memory cleanup."""
+        print("\n🧹 MEMORY CLEANUP DEMO")
+        print("=" * 50)
+        
+        print(f"Cleaning up {len(session_ids)} demo sessions...")
+        
+        for session_id in session_ids:
+            print(f"   🗑️  Clearing session: {session_id}")
+            self.memory_manager.clear_session(session_id)
+            
+            self.log_demo_step("Session Cleanup", {
+                'session_id': session_id,
+                'timestamp': datetime.now().isoformat()
+            })
+        
+        # Show final stats
+        stats = self.memory_manager.get_memory_stats()
+        print(f"\n📊 Final memory statistics:")
+        print(f"   📝 STM Active Sessions: {stats['stm']['active_sessions']}")
+        print(f"   🧠 LTM Fact Types: {len(stats['ltm']['fact_types'])}")
+        
+        print(f"\n✅ Memory cleanup demo completed!")
+    
+    def run_full_demo(self) -> None:
+        """Run the complete memory system demo."""
+        print("🎭 AMY MEMORY SYSTEM DEMO")
+        print("=" * 60)
+        print("This demo will show you how Amy's memory system works.")
+        print("It will demonstrate message processing, fact extraction,")
+        print("context building, and cross-platform functionality.")
+        
+        input("\nPress Enter to start the demo...")
+        
+        session_ids = []
         
         try:
-            from app.features.memory import MemoryManager
-            memory_manager = MemoryManager()
+            # Demo 1: Basic memory flow
+            session_id = self.demo_basic_memory_flow()
+            session_ids.append(session_id)
             
-            session_id = "demo_session_001"
+            input("\nPress Enter to continue to cross-platform demo...")
             
-            # Inspect STM
-            print("📝 Inspecting STM...")
-            stm_context = memory_manager.stm.get_context(session_id)
-            self.log_demo_step("STM Inspection", {
-                'session_id': session_id,
-                'message_count': len(stm_context),
-                'messages': stm_context
-            })
-            print(f"   ✅ STM: {len(stm_context)} messages in session")
-            for i, msg in enumerate(stm_context[-3:], 1):  # Show last 3
-                print(f"      {i}. {msg['role']}: {msg['content'][:50]}...")
+            # Demo 2: Cross-platform memory
+            platform_session_ids = self.demo_cross_platform_memory()
+            session_ids.extend(platform_session_ids)
             
-            # Inspect MTM
-            print("\n💾 Inspecting MTM...")
-            mtm_messages = memory_manager.mtm.get_conversation_messages(session_id)
-            self.log_demo_step("MTM Inspection", {
-                'session_id': session_id,
-                'message_count': len(mtm_messages),
-                'messages': mtm_messages
-            })
-            print(f"   ✅ MTM: {len(mtm_messages)} messages in database")
-            for i, msg in enumerate(mtm_messages[-3:], 1):  # Show last 3
-                print(f"      {i}. {msg['role']}: {msg['content'][:50]}...")
+            input("\nPress Enter to continue to fact extraction demo...")
             
-            # Inspect LTM
-            print("\n🧠 Inspecting LTM...")
-            ltm_stats = memory_manager.get_memory_stats()['ltm']
-            fact_types = ltm_stats.get('fact_types', {})
-            self.log_demo_step("LTM Inspection", {
-                'fact_types': fact_types,
-                'total_facts': sum(fact_types.values())
-            })
-            print(f"   ✅ LTM: {sum(fact_types.values())} total facts")
-            for fact_type, count in fact_types.items():
-                print(f"      • {fact_type}: {count} facts")
+            # Demo 3: Fact extraction
+            fact_session_id = self.demo_fact_extraction()
+            session_ids.append(fact_session_id)
             
-            print()
+            input("\nPress Enter to continue to context building demo...")
+            
+            # Demo 4: Context building
+            context_session_id = self.demo_context_building()
+            session_ids.append(context_session_id)
+            
+            input("\nPress Enter to continue to cleanup demo...")
+            
+            # Demo 5: Memory cleanup
+            self.demo_memory_cleanup(session_ids)
+            
+            print(f"\n🎉 DEMO COMPLETED SUCCESSFULLY!")
+            print(f"📊 Total demo operations logged: {len(self.demo_log)}")
             
         except Exception as e:
-            print(f"❌ Error inspecting memory systems: {e}")
-            print()
-    
-    def demo_step_6_cross_platform(self):
-        """Step 6: Demonstrate cross-platform memory capabilities."""
-        print("🌐 STEP 6: CROSS-PLATFORM MEMORY")
-        print("-" * 40)
-        
-        try:
-            from app.features.memory import MemoryManager
-            memory_manager = MemoryManager()
-            
-            # Simulate messages from different platforms
-            platforms = [
-                ("telegram", "telegram_user_123", "john_telegram"),
-                ("web", "web_user_456", "john_web"),
-                ("discord", "discord_user_789", "john_discord")
-            ]
-            
-            messages = [
-                "I use Telegram for quick chats",
-                "I prefer the web interface for longer conversations",
-                "Discord is great for community discussions"
-            ]
-            
-            print("Simulating messages across different platforms...")
-            print()
-            
-            for i, ((platform, user_id, username), message) in enumerate(zip(platforms, messages), 1):
-                session_id = f"{platform}_demo_session_{i:03d}"
-                
-                print(f"📱 Platform {i}: {platform.upper()}")
-                print(f"   Session: {session_id}")
-                print(f"   Message: '{message}'")
-                
-                # Process message
-                memory_manager.process_message(
-                    session_id=session_id,
-                    platform=platform,
-                    role="user",
-                    content=message,
-                    user_id=user_id,
-                    username=username
-                )
-                
-                self.log_demo_step(f"Cross-Platform Processing {i}", {
-                    'platform': platform,
-                    'session_id': session_id,
-                    'message': message
-                })
-                
-                print(f"   ✅ Processed through all memory systems")
-                print()
-            
-            # Show cross-platform statistics
-            print("📊 Cross-Platform Memory Statistics:")
-            stats = memory_manager.get_memory_stats()
-            mtm_stats = stats['mtm']
-            
-            if 'sessions' in mtm_stats:
-                platform_counts = {}
-                for session in mtm_stats['sessions']:
-                    platform = session['platform']
-                    platform_counts[platform] = platform_counts.get(platform, 0) + 1
-                
-                for platform, count in platform_counts.items():
-                    print(f"   • {platform}: {count} sessions")
-            
-            print()
-            
-        except Exception as e:
-            print(f"❌ Error demonstrating cross-platform memory: {e}")
-            print()
-    
-    def export_demo_log(self, filename: Optional[str] = None) -> str:
-        """Export the demo log to a JSON file."""
-        if not filename:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"memory_demo_log_{timestamp}.json"
-        
-        with open(filename, 'w') as f:
-            json.dump(self.demo_log, f, indent=2)
-        
-        return filename
+            print(f"\n❌ Demo error: {e}")
+            logger.error(f"Demo error: {e}")
 
 def main():
-    """Run the memory system demo."""
+    """Main demo interface."""
     demo = MemoryDemo()
     
-    print("🎬 Amy Memory System Demo")
-    print("This demo will show you exactly how the memory system works!")
-    print()
+    print("🎭 Amy Memory System Demo")
+    print("=" * 40)
     
-    # Run the complete demo
-    demo.run_complete_demo()
-    
-    # Export the demo log
-    filename = demo.export_demo_log()
-    print(f"Demo log exported to: {filename}")
+    while True:
+        print("\nAvailable demos:")
+        print("1. Basic memory flow")
+        print("2. Cross-platform memory")
+        print("3. Fact extraction")
+        print("4. Context building")
+        print("5. Full demo")
+        print("6. Exit")
+        
+        choice = input("\nSelect demo (1-6): ").strip()
+        
+        if choice == "1":
+            demo.demo_basic_memory_flow()
+        elif choice == "2":
+            demo.demo_cross_platform_memory()
+        elif choice == "3":
+            demo.demo_fact_extraction()
+        elif choice == "4":
+            demo.demo_context_building()
+        elif choice == "5":
+            demo.run_full_demo()
+        elif choice == "6":
+            print("👋 Exiting demo...")
+            break
+        else:
+            print("❌ Invalid choice. Please select 1-6.")
 
 if __name__ == "__main__":
     main() 
