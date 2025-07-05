@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Add the project root to Python path
-project_root = Path(__file__).parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 # Configure logging
@@ -71,7 +71,7 @@ def main():
         print("✅ Memory system initialized")
         print("✅ Starting bot...")
         print("\n📱 Amy is now running! Send messages to your Telegram bot.")
-        print("💡 Use /start to begin, /help for commands, /memory for stats")
+        print("💡 Use /help for commands, /memory for stats")
         print("🛑 Press Ctrl+C to stop the bot")
         print("-" * 50)
         

@@ -71,7 +71,7 @@ ts.test_telegram_integration()
 ## 📊 Memory Commands
 
 ### Telegram Bot Commands
-- `/start` - Initialize conversation with Amy
+
 - `/help` - Show available commands
 - `/memory` - Display memory statistics
 

@@ -5,11 +5,15 @@ Real-time visualization and debugging of the memory system
 """
 
 import os
+import sys
 import json
 import sqlite3
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 import logging
+
+# Add parent directory to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 # Set up logging for debugging
 logging.basicConfig(level=logging.DEBUG)
@@ -337,7 +341,7 @@ class MemoryDebugger:
             logger.error(f"Error getting memory stats: {e}")
             return {'error': str(e)}
     
-    def print_memory_visualization(self, session_id: str = None) -> None:
+    def print_memory_visualization(self, session_id: Optional[str] = None) -> None:
         """Print a visual representation of the memory system."""
         print("\n" + "="*80)
         print("🧠 AMY MEMORY SYSTEM VISUALIZATION")
@@ -391,7 +395,7 @@ class MemoryDebugger:
         
         print("\n" + "="*80)
     
-    def export_operation_log(self, filename: str = None) -> str:
+    def export_operation_log(self, filename: Optional[str] = None) -> str:
         """Export the operation log to a JSON file."""
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -424,7 +428,10 @@ def main():
         
         if choice == '1':
             session_id = input("Enter session ID (or press Enter for all): ").strip() or None
-            debugger.print_memory_visualization(session_id)
+            if session_id:
+                debugger.print_memory_visualization(session_id)
+            else:
+                debugger.print_memory_visualization()
             
         elif choice == '2':
             session_id = input("Enter session ID: ").strip()

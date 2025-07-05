@@ -8,6 +8,9 @@ import os
 import sys
 from datetime import datetime
 
+# Add parent directory to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+
 def print_header():
     """Print the header for the debug tools."""
     print("🧠 AMY MEMORY SYSTEM DEBUG TOOLS")
@@ -48,7 +51,7 @@ def main():
         if choice == '1':
             print("\n🎬 Starting Memory Demo...")
             print("=" * 40)
-            os.system("python3 memory_demo.py")
+            os.system("python3 tools/debug/memory_demo.py")
             
         elif choice == '2':
             print("\n🔍 Starting Live Memory Monitor...")
@@ -57,17 +60,17 @@ def main():
             print("Start a conversation with Amy in another terminal to see it in action!")
             print("Press Ctrl+C to stop monitoring.")
             print()
-            os.system("python3 live_memory_monitor.py")
+            os.system("python3 tools/debug/live_memory_monitor.py")
             
         elif choice == '3':
             print("\n🎨 Starting Memory Flow Visualizer...")
             print("=" * 40)
-            os.system("python3 memory_flow_visualizer.py")
+            os.system("python3 tools/debug/memory_flow_visualizer.py")
             
         elif choice == '4':
             print("\n🔧 Starting Memory Debugger...")
             print("=" * 40)
-            os.system("python3 memory_debugger.py")
+            os.system("python3 tools/debug/memory_debugger.py")
             
         elif choice == '5':
             print("\n📊 Quick Memory Statistics")

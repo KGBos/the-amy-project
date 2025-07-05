@@ -6,9 +6,14 @@ Comprehensive demonstration of how the memory system works
 
 import time
 import json
+import os
+import sys
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import logging
+
+# Add parent directory to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -241,7 +246,8 @@ class MemoryDemo:
             # Process through MTM
             print("💾 Processing AI response through MTM...")
             # Get existing conversation
-            with memory_manager.mtm.db_path as conn:
+            import sqlite3
+            with sqlite3.connect(memory_manager.mtm.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT id FROM conversations WHERE session_id = ?", (session_id,))
                 conversation_id = cursor.fetchone()[0]
@@ -387,7 +393,7 @@ class MemoryDemo:
             print(f"❌ Error demonstrating cross-platform memory: {e}")
             print()
     
-    def export_demo_log(self, filename: str = None) -> str:
+    def export_demo_log(self, filename: Optional[str] = None) -> str:
         """Export the demo log to a JSON file."""
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

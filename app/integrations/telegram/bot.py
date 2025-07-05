@@ -42,11 +42,7 @@ if not TELEGRAM_TOKEN:
 # Initialize memory manager
 memory_manager = MemoryManager()
 
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /start command."""
-    if update.message:
-        welcome_message = "Hi! I'm Amy, your AI assistant with memory. I'll remember our conversations and learn about you over time. How can I help you today?"
-        await update.message.reply_text(welcome_message)
+
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /help command."""
@@ -165,7 +161,6 @@ def main():
     application = Application.builder().token(TELEGRAM_TOKEN).build()
     
     # Add handlers
-    application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("memory", memory_stats_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

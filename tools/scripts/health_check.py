@@ -94,9 +94,9 @@ def check_files():
     required_files = [
         "app/core/amy_agent/agent.py",
         "app/integrations/telegram/bot.py",
-        "run_web.py",
-        "start_telegram.sh",
-        "start_web.sh"
+        "runners/run_web.py",
+        "runners/start_telegram.sh",
+        "runners/start_web.sh"
     ]
     
     missing_files = []

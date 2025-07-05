@@ -8,11 +8,15 @@ import time
 import json
 import threading
 import os
+import sys
 import sqlite3
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 import logging
 from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

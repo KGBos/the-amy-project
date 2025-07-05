@@ -6,9 +6,13 @@ Creates visual diagrams showing how memory operations flow through the system
 
 import json
 import os
+import sys
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 import logging
+
+# Add parent directory to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 logger = logging.getLogger(__name__)
 
