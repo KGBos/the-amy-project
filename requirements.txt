@@ -3,6 +3,13 @@ google-adk==1.5.0
 google-genai==1.24.0
 google-generativeai==0.8.5
 
+# Memory system
+mem0==0.1.0  # Coming soon - for LTM vector/graph memory
+
+# Audio processing
+openai-whisper==20231117  # For audio transcription
+soundfile==0.12.1  # For audio file handling
+
 # Telegram bot
 python-telegram-bot==22.2
 
@@ -23,3 +30,7 @@ requests==2.32.4
 # Utilities
 python-multipart==0.0.20
 pytest==8.2.2
+
+# Vector embeddings (for future use)
+sentence-transformers==2.2.2  # For semantic embeddings
+numpy==1.24.3  # Required for embeddings

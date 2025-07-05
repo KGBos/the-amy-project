@@ -1,4 +1,4 @@
-# Amy: The Proactive Digital Twin
+# Amy: The Proactive Multimodal Digital Twin
 
 ## 🚀 Quick Start
 
@@ -25,7 +25,7 @@
 the-amy-project/
 ├── 📁 app/                    # Core application
 │   ├── core/amy_agent/       # Amy's core logic
-│   ├── features/memory/      # Memory system (STM, MTM, LTM)
+│   ├── features/memory/      # Memory system (STM, EpTM, LTM)
 │   └── integrations/         # Platform integrations
 ├── 📁 tools/                 # Development & debugging tools
 │   ├── debug/               # Memory debugging tools
@@ -42,6 +42,7 @@ the-amy-project/
 
 - **[Main Documentation](docs/README.md)** - Complete setup and usage guide
 - **[Memory System](docs/MEMORY_SYSTEM.md)** - Detailed memory architecture
+- **[Multimodal Architecture](docs/MULTIMODAL_ARCHITECTURE.md)** - Voice, video, and multimodal capabilities
 - **[Debug Guide](docs/MEMORY_DEBUG_GUIDE.md)** - How to debug the memory system
 - **[Known Issues](docs/AMY_ISSUES.md)** - Current issues and solutions
 - **[API Integration](docs/GEMINI.md)** - Gemini API integration guide
@@ -49,11 +50,12 @@ the-amy-project/
 
 ## 🧠 Memory System
 
-Amy implements a sophisticated three-tier memory system:
+Amy implements a sophisticated four-tier memory system:
 
+- **Sensory Memory** - Audio/visual input processing and transcription
 - **STM (Short-Term Memory)** - Immediate conversation context
-- **MTM (Medium-Term Memory)** - Permanent conversation storage
-- **LTM (Long-Term Memory)** - Semantic knowledge and facts
+- **EpTM (Episodic Memory)** - Summarized conversation chunks and embeddings
+- **LTM (Long-Term Memory)** - Semantic knowledge and facts via Mem0
 
 ## 🛠️ Development Tools
 
@@ -149,11 +151,13 @@ python3 -m pytest tests/
 2. Add your API keys:
    - `GEMINI_API_KEY` - Google AI Studio
    - `TELEGRAM_BOT_TOKEN` - BotFather
+   - `MEM0_API_KEY` - Mem0 for LTM (coming soon)
 
 ## 📈 Features
 
-- **Proactive Digital Twin** - Intelligent personal assistant
-- **Three-Tier Memory** - STM, MTM, LTM systems
+- **Proactive Digital Twin** - Intelligent personal assistant with memory
+- **Four-Tier Memory** - Sensory, STM, EpTM, LTM systems
+- **Multimodal Ready** - Text, voice, and future video support
 - **Cross-Platform** - Telegram, Web, extensible
 - **Fact Extraction** - Automatic learning from conversations
 - **Context Building** - Intelligent response generation
@@ -161,7 +165,7 @@ python3 -m pytest tests/
 
 ## 🎯 Vision
 
-Amy is not merely a conversational AI; she is your **Proactive Digital Twin**, an intelligent entity deeply integrated into your life, anticipating needs, optimizing your time, and enhancing your capabilities across all domains.
+Amy is not merely a conversational AI; she is your **Proactive Multimodal Digital Twin**, an intelligent entity deeply integrated into your life, anticipating needs, optimizing your time, and enhancing your capabilities across all domains. She remembers you, adapts to context, and handles tasks across text and voice using layered memory systems.
 
 ---
 

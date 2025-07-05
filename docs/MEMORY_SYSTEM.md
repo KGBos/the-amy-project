@@ -1,27 +1,37 @@
 # Amy's Memory System
 
-Amy now has a comprehensive memory system with three layers: **Short-Term Memory (STM)**, **Medium-Term Memory (MTM)**, and **Long-Term Memory (LTM)**. This system enables Amy to remember conversations, learn about users, and build context across all communication platforms.
+Amy now has a comprehensive four-tier memory system: **Sensory Memory**, **Short-Term Memory (STM)**, **Episodic Memory (EpTM)**, and **Long-Term Memory (LTM)**. This system enables Amy to remember conversations, learn about users, and build context across all communication platforms with multimodal capabilities.
 
 ## 🧠 Memory Architecture
 
-### STM (Short-Term Memory)
+### **Sensory Memory**
+- **Purpose**: Process audio/visual input and transcribe to text
+- **Technology**: Whisper for audio transcription, future video processing
+- **Integration**: Seamless flow into STM for immediate context
+- **Use Case**: Real-time audio processing and voice input handling
+
+### **STM (Short-Term Memory)**
 - **Purpose**: Immediate conversation context and recent message history
 - **Storage**: In-memory buffer (20 messages per session)
 - **Use Case**: Fast access to recent conversation for context building
+- **Performance**: Sub-100ms access time
 
-### MTM (Medium-Term Memory)
-- **Purpose**: Permanent conversation storage and session management
-- **Storage**: SQLite database (`instance/amy_memory.db`)
-- **Use Case**: Long-term conversation history and cross-platform session tracking
+### **EpTM (Episodic Memory)**
+- **Purpose**: Summarized conversation chunks and semantic embeddings
+- **Storage**: SQLite database with chunk summaries and embeddings
+- **Use Case**: Middle-layer memory for conversation patterns and themes
+- **Features**: Automatic summarization and chunking
 
-### LTM (Long-Term Memory)
-- **Purpose**: Semantic knowledge storage and fact extraction
-- **Storage**: Vector database (currently JSON files in `instance/vector_db/`)
+### **LTM (Long-Term Memory)**
+- **Purpose**: Semantic knowledge storage and fact extraction via Mem0
+- **Storage**: Mem0 vector/graph database
 - **Use Case**: Learning user preferences, relationships, and goals
+- **Features**: Semantic search, memory promotion, and pruning
 
-### Memory Manager
-- **Purpose**: Orchestrates all three memory systems
+### **Memory Manager**
+- **Purpose**: Orchestrates all four memory systems
 - **Features**: Unified interface for processing messages and building context
+- **Advanced Features**: Memory promotion, pruning, aging, and lineage tracking
 
 ## 🚀 Quick Start
 
@@ -88,11 +98,12 @@ The `/memory` command shows:
 ```bash
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 GOOGLE_API_KEY=your_google_api_key
+MEM0_API_KEY=your_mem0_api_key  # Coming soon
 ```
 
 ### Database Paths
 - **MTM Database**: `instance/amy_memory.db`
-- **LTM Vector DB**: `instance/vector_db/`
+- **LTM Vector DB**: `instance/vector_db/` (will migrate to Mem0)
 - **Logs**: `instance/amy_telegram_bot.log`
 
 ## 📁 File Structure
@@ -100,9 +111,10 @@ GOOGLE_API_KEY=your_google_api_key
 ```
 app/features/memory/
 ├── __init__.py          # Memory system exports
+├── sensory.py           # Sensory memory (audio/video processing)
 ├── stm.py              # Short-Term Memory
-├── mtm.py              # Medium-Term Memory  
-├── ltm.py              # Long-Term Memory
+├── episodic.py          # Episodic Memory (enhanced MTM)
+├── ltm.py              # Long-Term Memory (Mem0 integration)
 └── memory_manager.py   # Memory Manager
 
 test_suite.py           # Comprehensive test suite
@@ -165,7 +177,9 @@ for role, content in conversation:
 ## 🔍 Memory Features
 
 ### Context Building
+- **Sensory Context**: Audio/visual input processing
 - **STM Context**: Recent conversation messages
+- **EpTM Context**: Summarized conversation chunks
 - **LTM Context**: Relevant facts and preferences
 - **Combined Context**: Unified context for AI responses
 
@@ -173,77 +187,126 @@ for role, content in conversation:
 - **Personal Info**: Names, relationships, locations
 - **Preferences**: Likes, dislikes, interests
 - **Goals**: Plans, aspirations, learning objectives
+- **Patterns**: Communication style, interaction patterns
 
 ### Cross-Platform Support
 - **Telegram**: `telegram_{chat_id}` session IDs
 - **Web**: `web_{session_id}` session IDs
-- **Discord**: `discord_{channel_id}` session IDs
+- **Voice**: `voice_{session_id}` session IDs (coming soon)
+- **Video**: `video_{session_id}` session IDs (future)
 
 ### Search Capabilities
 - **Content Search**: Search across all conversations
 - **Fact Search**: Search stored facts by type
-- **Semantic Search**: Future vector similarity search
+- **Semantic Search**: Vector similarity search via Mem0
+- **Cross-Modal Search**: Search across text, audio, and video
 
 ## 📈 Performance
 
 ### Memory Usage
+- **Sensory**: ~5-10MB per audio session
 - **STM**: ~1MB per active session (20 messages)
-- **MTM**: ~10-50MB database (depending on conversation volume)
+- **EpTM**: ~10-50MB database (depending on conversation volume)
 - **LTM**: ~1-5MB vector database (depending on facts stored)
 
 ### Response Time
+- **Sensory Processing**: <500ms (audio transcription)
 - **Context Building**: <100ms
 - **Message Processing**: <50ms
 - **Search Operations**: <200ms
+
+## 🚧 Upcoming Features
+
+### Mem0 Integration
+- **Semantic Search**: Advanced vector similarity search
+- **Memory Promotion**: Intelligent fact promotion from EpTM to LTM
+- **Memory Pruning**: Automatic cleanup of irrelevant memories
+- **Memory Aging**: Time-based memory decay
+
+### Voice Processing
+- **Real-time Transcription**: Live audio processing
+- **Voice Response**: Text-to-speech capabilities
+- **Audio Context**: Voice tone and emotion analysis
+
+### Enhanced Episodic Memory
+- **Automatic Summarization**: LLM-powered conversation summaries
+- **Chunk Embeddings**: Semantic embeddings for conversation chunks
+- **Pattern Recognition**: Identify conversation themes and patterns
 
 ## 🛠️ Troubleshooting
 
 ### Common Issues
 
-1. **Import Errors**
-   ```bash
-   pip install -r requirements.txt
-   ```
+#### Memory Not Persisting
+```bash
+# Check database permissions
+ls -la instance/amy_memory.db
 
-2. **Database Errors**
-   ```bash
-   # Check database permissions
-   ls -la instance/
-   
-   # Recreate database if needed
-   rm instance/amy_memory.db
-   python3 test_suite.py
-   ```
-
-3. **Memory Not Working**
-   ```bash
-   # Check logs
-   tail -f instance/amy_telegram_bot.log
-   
-   # Run tests
-   python3 test_suite.py
-   ```
-
-### Debug Mode
-```python
-import logging
-logging.getLogger('app.features.memory').setLevel(logging.DEBUG)
+# Reset memory system
+python3 tools/management/reset_amy_memory.py
 ```
 
-## 🎯 Future Enhancements
+#### Slow Response Times
+```bash
+# Check memory statistics
+python3 tools/management/manage_memory.py
 
-### Planned Features
-- **Vector Embeddings**: True semantic search in LTM
-- **Memory Compression**: Automatic fact summarization
-- **Memory Expiration**: Automatic cleanup of old data
-- **Memory Visualization**: Web interface for memory exploration
-- **Memory Export**: Backup and restore functionality
+# Monitor memory usage
+python3 tools/debug/live_memory_monitor.py
+```
 
-### Advanced Features
-- **Memory Clustering**: Group related facts and conversations
-- **Memory Inference**: Deduce new facts from existing data
-- **Memory Validation**: Verify fact accuracy over time
-- **Memory Privacy**: User-controlled data retention
+#### Context Building Issues
+```bash
+# Debug memory flow
+python3 tools/debug/memory_flow_visualizer.py
+
+# Interactive debugging
+python3 tools/debug/memory_debugger.py
+```
+
+### Debug Tools
+
+#### Memory Debugger
+```bash
+python3 tools/debug/memory_debugger.py
+```
+- Interactive debugging interface
+- Real-time memory inspection
+- Context building visualization
+
+#### Live Memory Monitor
+```bash
+python3 tools/debug/live_memory_monitor.py
+```
+- Real-time memory statistics
+- Performance monitoring
+- Memory usage tracking
+
+#### Memory Flow Visualizer
+```bash
+python3 tools/debug/memory_flow_visualizer.py
+```
+- Visual representation of memory flow
+- Data flow analysis
+- Performance bottleneck identification
+
+## 🔮 Future Enhancements
+
+### Advanced Memory Features
+- **Memory Compression**: Intelligent memory compression
+- **Memory Indexing**: Advanced indexing for faster retrieval
+- **Memory Clustering**: Group related memories together
+- **Memory Evolution**: Memory that evolves over time
+
+### Multimodal Memory
+- **Visual Memory**: Store and retrieve visual information
+- **Audio Memory**: Store voice patterns and preferences
+- **Cross-Modal Association**: Link memories across modalities
+
+### Proactive Memory
+- **Predictive Retrieval**: Anticipate needed memories
+- **Contextual Triggers**: Automatic memory activation
+- **Memory Synthesis**: Combine memories for new insights
 
 ## 📝 API Reference
 
