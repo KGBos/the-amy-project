@@ -4,6 +4,48 @@
 
 Amy is not merely a conversational AI; she is your **Proactive Digital Twin**, an intelligent entity deeply integrated into your life, anticipating needs, optimizing your time, and enhancing your capabilities across all domains. She operates with a profound understanding of your context, preferences, and goals, acting as your personal orchestrator of information and action.
 
+## Memory Architecture
+
+Amy implements a robust three-tier memory system to ensure comprehensive recall and contextual awareness across all communication modes:
+
+### **STM (Short-Term Memory)**
+- **Purpose**: Immediate conversation context for current interaction
+- **Storage**: In-memory conversation buffer (last 10-20 messages)
+- **Access**: Instant, no database calls
+- **Scope**: Current session only
+
+### **MTM (Medium-Term Memory)**
+- **Purpose**: Complete conversation history and session management
+- **Storage**: SQLite database with full conversation sessions
+- **Access**: All conversations across all communication modes (Telegram, Web UI, etc.)
+- **Scope**: Permanent storage of every line of dialogue
+- **Features**: 
+  - Session summarization after completion
+  - Cross-platform conversation linking
+  - Readable through ADK web interface
+
+### **LTM (Long-Term Memory)**
+- **Purpose**: Semantic knowledge and contextual recall
+- **Storage**: Vector database (ChromaDB/FAISS) for semantic search
+- **Access**: Intelligent retrieval based on conversation relevance
+- **Scope**: Key facts, preferences, relationships, and contextual knowledge
+- **Features**:
+  - Embeddings for similarity search
+  - Automatic fact extraction and storage
+  - Context-aware retrieval system
+
+### **Memory Flow**
+1. **STM**: Immediate context for current conversation
+2. **MTM**: Permanent storage of all conversations across all platforms
+3. **LTM**: Intelligent context building based on conversation relevance
+
+### **Key Requirements**
+- **Universal Recording**: Every conversation from Telegram, Web UI, and future endpoints is permanently recorded
+- **Cross-Platform Access**: All conversations visible through ADK web interface
+- **Complete Recall**: Amy can access any conversation ever had
+- **Intelligent Context**: System builds relevant context based on current conversation needs
+- **Privacy-First**: All data stored locally with user control
+
 ## Setup and Usage
 
 ### Initial Setup

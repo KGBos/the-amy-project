@@ -22,3 +22,4 @@ requests==2.32.4
 
 # Utilities
 python-multipart==0.0.20
+pytest==8.2.2

@@ -12,3 +12,4 @@ __pycache__/
 # Log files
 *.log
 llm_request_log.txt
+amy_telegram_bot.log
