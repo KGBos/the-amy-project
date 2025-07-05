@@ -61,10 +61,6 @@ def setup_logging():
                 except Exception as e:
                     # Use a different logger to avoid recursion if the root logger has issues
                     logging.getLogger(__name__).error(f"Failed to write LLM request to file: {e}")
-            
-            # Also log to console for debugging
-            if record.name == 'google_adk.google.adk.models.google_llm' and 'LLM Request:' in record.msg:
-                logger.info(f"🔍 TRACE: LLM Request captured: {record.getMessage()}")
 
     llm_request_handler = LLMRequestFileHandler(llm_log_file)
     root_logger.addHandler(llm_request_handler)
@@ -102,7 +98,7 @@ async def get_adk_response(runner: Runner, session_service: DatabaseSessionServi
     Manages the ADK session and retrieves the agent's response.
     """
     try:
-        logger.info(f"🔍 TRACE: get_adk_response called with message: '{message}'")
+        logger.info(f"Getting ADK response for session: {session_id}")
         
         # Get or create session
         session = await session_service.get_session(
@@ -110,59 +106,33 @@ async def get_adk_response(runner: Runner, session_service: DatabaseSessionServi
         )
         if not session:
             logger.info(f"Creating new ADK session: {session_id}")
-            session = await session_service.create_session(
+            await session_service.create_session(
                 app_name="amy_agent", user_id="telegram_user", session_id=session_id
             )
         else:
             logger.info(f"Resuming ADK session: {session_id}")
 
-        # Prepare content for the ADK agent - use the actual user message
+        # Prepare content for the ADK agent
         adk_content = Content(parts=[{"text": message}])
-        logger.info(f"🔍 TRACE: Original message '{message}' converted to ADK content: {adk_content}")
-
+        
         # Log the user message details
         log_user_message(user_id, username, session_id, message, adk_content)
 
         # Run the ADK agent
         response_text = ""
-        logger.info(f"🔍 TRACE: About to run ADK agent with content: {adk_content}")
-        logger.info(f"🔍 TRACE: Agent instruction: {root_agent.instruction}")
-        logger.info(f"🔍 TRACE: Agent name: {root_agent.name}")
-        logger.info(f"🔍 TRACE: Agent description: {root_agent.description}")
+        async for event in runner.run_async(
+            user_id="telegram_user",
+            session_id=session_id,
+            new_message=adk_content,
+        ):
+            logger.debug(f"ADK event received: {event}")
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        response_text += part.text
         
-        # Try using the agent directly instead of through the runner
-        try:
-            # First, let's try to use the agent's direct method
-            logger.info(f"🔍 TRACE: Attempting direct agent call with message: '{message}'")
-            
-            # Create a more explicit content structure
-            user_content = Content(
-                parts=[{"text": message}],
-                role="user"
-            )
-            logger.info(f"🔍 TRACE: Created user content with role: {user_content}")
-            
-            async for event in runner.run_async(
-                user_id="telegram_user",
-                session_id=session_id,
-                new_message=user_content,
-            ):
-                logger.info(f"🔍 TRACE: ADK event received: {event}")
-                logger.info(f"🔍 TRACE: Event type: {type(event)}")
-                logger.info(f"🔍 TRACE: Event content: {event.content if hasattr(event, 'content') else 'No content'}")
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        if part.text:
-                            response_text += part.text
-                            logger.info(f"🔍 TRACE: Added text to response: '{part.text}'")
-            
-            logger.info(f"🔍 TRACE: Final response_text: '{response_text}'")
-            return response_text
-            
-        except Exception as e:
-            logger.error(f"🔍 TRACE: Error with direct agent call: {e}")
-            # Fallback to a simple response
-            return f"I received your message: '{message}'. How can I help you with that?"
+        logger.info(f"Final ADK response: '{response_text}'")
+        return response_text
         
     except Exception as e:
         logger.error(f"Error during ADK agent run: {e}", exc_info=True)
@@ -193,11 +163,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_id = str(update.message.from_user.id)
     username = update.message.from_user.username or 'unknown'
     
-    # Create a unique session ID for each conversation turn to maintain statelessness at the bot level
-    unique_session_id = f"{chat_id}-{int(time.time())}-{random.randint(1000,9999)}"
+    # Use persistent session ID based on chat_id to maintain conversation memory
+    persistent_session_id = f"telegram_chat_{chat_id}"
 
-    logger.info(f"🔍 TRACE: handle_message - Original user message: '{user_message}'")
-    logger.info(f"🔍 TRACE: handle_message - User details: user_id={user_id}, username={username}, chat_id={chat_id}")
+    logger.info(f"Received message from user={username}({user_id}) in chat={chat_id}. Using session_id={persistent_session_id}")
 
     try:
         runner: Runner = context.bot_data["runner"]
@@ -207,12 +176,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("Sorry, the bot is not properly initialized. Please contact the administrator.")
         return
 
-    logger.info(f"🔍 TRACE: handle_message - About to call get_adk_response with message: '{user_message}'")
-    response_text = await get_adk_response(runner, session_service, user_id, username, unique_session_id, user_message)
-    logger.info(f"🔍 TRACE: handle_message - Received response from get_adk_response: '{response_text}'")
+    response_text = await get_adk_response(runner, session_service, user_id, username, persistent_session_id, user_message)
 
     if response_text:
-        logger.info(f"🔍 TRACE: handle_message - Sending response to user: '{response_text}'")
         await update.message.reply_text(response_text)
     else:
         logger.warning("Amy didn't provide a response. Sending fallback message.")
@@ -221,7 +187,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 def setup_adk() -> tuple[DatabaseSessionService, Runner]:
     """Initializes and returns the ADK Session Service and Runner."""
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    db_path = os.path.join(project_root, "amy_memory.db")
+    db_path = os.path.join(project_root, "instance", "amy_memory.db")
     db_url = f"sqlite:///{db_path}"
     
     logger.info(f"Initializing DatabaseSessionService with db_url: {db_url}")

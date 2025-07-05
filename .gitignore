@@ -1,9 +1,14 @@
+# Environment
 venv/
-app/amy_memory.db
 .env
-*.sqlite
-*.db
-*.log
-llm_request_log.txt
+
+# Instance folder (for database, logs, etc.)
+instance/
+
+# Python cache
 *.pyc
 __pycache__/
+
+# Log files
+*.log
+llm_request_log.txt

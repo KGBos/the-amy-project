@@ -4,6 +4,76 @@
 
 Amy is not merely a conversational AI; she is your **Proactive Digital Twin**, an intelligent entity deeply integrated into your life, anticipating needs, optimizing your time, and enhancing your capabilities across all domains. She operates with a profound understanding of your context, preferences, and goals, acting as your personal orchestrator of information and action.
 
+## Setup and Usage
+
+### Initial Setup
+
+1.  **Create a Virtual Environment:**
+    ```bash
+    python3 -m venv venv
+    ```
+
+2.  **Activate the Environment:**
+    ```bash
+    source venv/bin/activate
+    ```
+
+3.  **Install Dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Configure Environment Variables:**
+    *   Copy the `.env.example` file (if it exists) to a new file named `.env`.
+    *   Fill in the required API keys and tokens in the `.env` file (e.g., `TELEGRAM_BOT_TOKEN`, Google API keys).
+
+5.  **Initialize the Database:**
+    *   Run the initialization script once to create the database schema in the `instance/` directory.
+    ```bash
+    python3 init_db.py
+    ```
+
+### Running the Bot
+
+*   **Telegram Bot:**
+    *   To start the Telegram bot, simply run the launcher script:
+    ```bash
+    ./start_telegram.sh
+    ```
+
+*   **Web UI for Testing:**
+    *   To test the agent through a web interface, run the web launcher script:
+    ```bash
+    ./start_web.sh
+    ```
+    *   This will provide a URL (usually `http://localhost:8000`) to access the chat interface in your browser. The web UI shares the same database (`instance/amy_memory.db`) as the Telegram bot.
+
+### Development Tools
+
+*   **Quick Setup:**
+    ```bash
+    ./setup_dev.sh
+    ```
+    *   Automatically sets up the virtual environment, installs dependencies, and initializes the database.
+
+*   **Health Check:**
+    ```bash
+    python3 health_check.py
+    ```
+    *   Verifies that all components are properly configured and working.
+
+*   **View Sessions:**
+    ```bash
+    python3 view_sessions.py
+    ```
+    *   Displays all conversation sessions and their history from the database.
+
+*   **Manage Memory:**
+    ```bash
+    python3 manage_memory.py
+    ```
+    *   Interactive tool to backup, reset, or restore conversation memory.
+
 **Core Capabilities & Features:**
 
 1.  **Hyper-Contextual Awareness (Beyond Basic Memory):**

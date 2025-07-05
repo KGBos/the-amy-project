@@ -4,7 +4,7 @@ import os
 
 # Get the absolute path to the project's root directory
 project_root = os.path.dirname(os.path.abspath(__file__))
-db_path = os.path.join(project_root, 'app', 'amy_memory.db')
+db_path = os.path.join(project_root, 'instance', 'amy_memory.db')
 db_url = f"sqlite:///{db_path}"
 
 session_service = DatabaseSessionService(db_url=db_url)
