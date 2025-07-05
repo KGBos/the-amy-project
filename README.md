@@ -6,6 +6,9 @@
 # Setup development environment
 ./tools/scripts/setup_dev.sh
 
+# Setup agent logging (recommended)
+./tools/scripts/setup_git_hooks.sh
+
 # Run Amy (Telegram Bot)
 ./runners/run_amy_bot.py
 
@@ -53,6 +56,20 @@ Amy implements a sophisticated three-tier memory system:
 - **LTM (Long-Term Memory)** - Semantic knowledge and facts
 
 ## 🛠️ Development Tools
+
+### Agent Logging System
+```bash
+# Setup agent logging for multi-agent development
+./tools/scripts/setup_git_hooks.sh
+
+# Agent-specific commits (no manual git config switching needed!)
+python3 tools/scripts/agent_commit.py claude "Added memory system features"
+python3 tools/scripts/agent_commit.py gemini "Fixed web interface"
+python3 tools/scripts/agent_commit.py user "Manual configuration changes"
+
+# Manual agent logging
+python3 tools/scripts/agent_logger.py --action=session_start --agent=claude --model=claude-3.5-sonnet
+```
 
 ### Debug Tools
 ```bash

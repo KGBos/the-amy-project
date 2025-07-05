@@ -1,0 +1,41 @@
+#!/bin/bash
+# Post-commit hook for agent logging
+# This hook logs additional commit information after commits
+
+# Get the commit hash
+COMMIT_HASH=$(git rev-parse HEAD)
+COMMIT_MESSAGE=$(git log -1 --pretty=format:"%s")
+
+# Get the current git user name (agent name)
+AGENT_NAME=$(git config user.name)
+AGENT_EMAIL=$(git config user.email)
+
+# If no agent name is set, try to detect from email
+if [ -z "$AGENT_NAME" ] || [ "$AGENT_NAME" = "Your Name" ]; then
+    case "$AGENT_EMAIL" in
+        *"claude"*)
+            AGENT_NAME="claude"
+            MODEL_NAME="claude-3.5-sonnet"
+            ;;
+        *"gemini"*)
+            AGENT_NAME="gemini"
+            MODEL_NAME="gemini-2.0-flash"
+            ;;
+        *"codex"*)
+            AGENT_NAME="codex"
+            MODEL_NAME="gpt-4-turbo"
+            ;;
+        *)
+            AGENT_NAME="unknown"
+            MODEL_NAME="unknown"
+            ;;
+    esac
+fi
+
+# Get list of changed files
+CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD)
+
+# Log the commit completion
+python3 tools/scripts/agent_logger.py --action=commit_complete --agent="$AGENT_NAME" --model="$MODEL_NAME" --commit_hash="$COMMIT_HASH" --files="$CHANGED_FILES" --message="$COMMIT_MESSAGE"
+
+echo "Agent logging: Commit $COMMIT_HASH logged for $AGENT_NAME ($MODEL_NAME)" 

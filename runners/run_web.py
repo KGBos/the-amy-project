@@ -29,3 +29,6 @@ adk_runner = Runner(
 )
 
 print(f"Web runner configured to use database: {db_url}")
+
+# The adk_runner is configured and ready to be used by the ADK web command
+# To start the web interface, use: adk web --runner_path "runners/run_web.py:adk_runner"
