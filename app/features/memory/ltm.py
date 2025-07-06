@@ -1,6 +1,6 @@
 """
-Long-Term Memory (LTM) for Amy
-Handles semantic search and knowledge storage using vector embeddings
+Long-Term Memory (LTM) for Amy using Mem0
+Handles semantic search and knowledge storage using Mem0 vector database
 """
 
 from typing import Dict, List, Optional, Any
@@ -9,17 +9,25 @@ import logging
 import json
 import os
 
+try:
+    import mem0
+    from mem0 import Memory
+    MEM0_AVAILABLE = True
+except ImportError:
+    MEM0_AVAILABLE = False
+    logging.warning("Mem0 not available, falling back to JSON storage")
+
 logger = logging.getLogger(__name__)
 
 class LongTermMemory:
     """
-    Long-Term Memory system for semantic knowledge storage and retrieval.
+    Long-Term Memory system using Mem0 for semantic knowledge storage and retrieval.
     Uses vector embeddings for similarity search and fact extraction.
     """
     
     def __init__(self, vector_db_path: str = "instance/vector_db"):
         """
-        Initialize LTM with vector database path.
+        Initialize LTM with Mem0 vector database.
         
         Args:
             vector_db_path: Path to the vector database storage
@@ -27,13 +35,38 @@ class LongTermMemory:
         self.vector_db_path = vector_db_path
         self._ensure_db_exists()
         
+        if MEM0_AVAILABLE:
+            try:
+                # Configure Mem0 with local file storage (Milvus Lite)
+                config = {
+                    "vector_store": {
+                        "provider": "milvus",
+                        "config": {
+                            "collection_name": "amy_ltm",
+                            "embedding_model_dims": "1536",
+                            "url": f"{vector_db_path}/milvus.db",  # Local file storage
+                        },
+                    },
+                    "version": "v1.1",
+                }
+                
+                # Initialize Mem0 memory
+                self.memory = Memory.from_config(config)
+                logger.info("Initialized Mem0-based LTM with local Milvus storage")
+            except Exception as e:
+                logger.error(f"Failed to initialize Mem0: {e}")
+                self.memory = None
+        else:
+            self.memory = None
+            logger.warning("Mem0 not available, using JSON fallback")
+        
     def _ensure_db_exists(self) -> None:
         """Ensure the vector database directory exists."""
         os.makedirs(self.vector_db_path, exist_ok=True)
         
     def store_fact(self, fact_type: str, content: str, metadata: Optional[Dict] = None) -> str:
         """
-        Store a fact in long-term memory.
+        Store a fact in long-term memory using Mem0.
         
         Args:
             fact_type: Type of fact (preference, relationship, goal, etc.)
@@ -45,26 +78,55 @@ class LongTermMemory:
         """
         fact_id = f"{fact_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
+        if MEM0_AVAILABLE and self.memory:
+            try:
+                # Store in Mem0 with metadata
+                fact_metadata = {
+                    'id': fact_id,
+                    'type': fact_type,
+                    'created_at': datetime.now().isoformat(),
+                    **(metadata or {})
+                }
+                
+                # Add to Mem0 memory
+                result = self.memory.add(
+                    messages=content,
+                    user_id="amy_user",
+                    metadata=fact_metadata
+                )
+                
+                logger.info(f"Stored fact in Mem0 LTM: {fact_type} - {content[:50]}...")
+                return fact_id
+                
+            except Exception as e:
+                logger.error(f"Failed to store fact in Mem0: {e}")
+                # Fall back to JSON storage
+                return self._store_fact_json(fact_id, fact_type, content, metadata)
+        else:
+            # Fall back to JSON storage
+            return self._store_fact_json(fact_id, fact_type, content, metadata)
+    
+    def _store_fact_json(self, fact_id: str, fact_type: str, content: str, metadata: Optional[Dict] = None) -> str:
+        """Fallback JSON storage method."""
         fact_data = {
             'id': fact_id,
             'type': fact_type,
             'content': content,
             'metadata': metadata or {},
             'created_at': datetime.now().isoformat(),
-            'embedding': None  # Will be computed when embedding model is available
+            'embedding': None
         }
         
-        # Store in JSON file for now (will be replaced with proper vector DB)
         fact_file = os.path.join(self.vector_db_path, f"{fact_id}.json")
         with open(fact_file, 'w') as f:
             json.dump(fact_data, f, indent=2)
             
-        logger.info(f"Stored fact in LTM: {fact_type} - {content[:50]}...")
+        logger.info(f"Stored fact in JSON LTM: {fact_type} - {content[:50]}...")
         return fact_id
         
     def search_facts(self, query: str, fact_type: Optional[str] = None, limit: int = 10) -> List[Dict]:
         """
-        Search for facts by content similarity.
+        Search for facts by content similarity using Mem0.
         
         Args:
             query: Search query
@@ -74,9 +136,45 @@ class LongTermMemory:
         Returns:
             List of matching facts
         """
+        if MEM0_AVAILABLE and self.memory:
+            try:
+                # Search using Mem0
+                search_results = self.memory.search(
+                    query=query,
+                    user_id="amy_user",
+                    limit=limit * 2  # Get more results to filter by type
+                )
+                
+                # Convert results to our format
+                facts = []
+                for result in search_results.get('results', []):
+                    # Filter by type if specified
+                    if fact_type and result.get('metadata', {}).get('type') != fact_type:
+                        continue
+                    
+                    facts.append({
+                        'id': result.get('id'),
+                        'type': result.get('metadata', {}).get('type'),
+                        'content': result.get('memory'),
+                        'metadata': result.get('metadata', {}),
+                        'created_at': result.get('created_at'),
+                        'similarity_score': result.get('score', 0.0)
+                    })
+                
+                return facts[:limit]
+                
+            except Exception as e:
+                logger.error(f"Failed to search facts in Mem0: {e}")
+                # Fall back to JSON search
+                return self._search_facts_json(query, fact_type, limit)
+        else:
+            # Fall back to JSON search
+            return self._search_facts_json(query, fact_type, limit)
+    
+    def _search_facts_json(self, query: str, fact_type: Optional[str] = None, limit: int = 10) -> List[Dict]:
+        """Fallback JSON search method."""
         results = []
         
-        # Simple text search for now (will be replaced with vector similarity)
         for filename in os.listdir(self.vector_db_path):
             if filename.endswith('.json'):
                 fact_file = os.path.join(self.vector_db_path, filename)
@@ -88,7 +186,7 @@ class LongTermMemory:
                     if fact_type and fact_data.get('type') != fact_type:
                         continue
                         
-                    # Simple text matching (will be replaced with embedding similarity)
+                    # Simple text matching
                     if query.lower() in fact_data.get('content', '').lower():
                         results.append(fact_data)
                         
@@ -109,6 +207,35 @@ class LongTermMemory:
         Returns:
             List of facts of the specified type
         """
+        if MEM0_AVAILABLE and self.memory:
+            try:
+                # Get all facts and filter by type
+                all_results = self.memory.get_all(user_id="amy_user")
+                
+                # Filter by type
+                facts = []
+                for result in all_results.get('results', []):
+                    if result.get('metadata', {}).get('type') == fact_type:
+                        facts.append({
+                            'id': result.get('id'),
+                            'type': result.get('metadata', {}).get('type'),
+                            'content': result.get('memory'),
+                            'metadata': result.get('metadata', {}),
+                            'created_at': result.get('created_at')
+                        })
+                
+                return facts
+                
+            except Exception as e:
+                logger.error(f"Failed to get facts by type in Mem0: {e}")
+                # Fall back to JSON method
+                return self._get_facts_by_type_json(fact_type)
+        else:
+            # Fall back to JSON method
+            return self._get_facts_by_type_json(fact_type)
+    
+    def _get_facts_by_type_json(self, fact_type: str) -> List[Dict]:
+        """Fallback JSON method for getting facts by type."""
         results = []
         
         for filename in os.listdir(self.vector_db_path):
