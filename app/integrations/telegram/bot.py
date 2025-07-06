@@ -130,7 +130,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             )
         )
         
-        amy_response = response.text
+        # Check if response was blocked by safety filters
+        if response.candidates and response.candidates[0].finish_reason == 2:
+            amy_response = "I apologize, but I'm unable to respond to that message due to content safety filters. Could you please rephrase your message?"
+        elif response.text:
+            amy_response = response.text
+        else:
+            amy_response = "I'm sorry, I encountered an issue generating a response. Please try again."
         
         # Process Amy's response through memory system
         memory_manager.process_message(
