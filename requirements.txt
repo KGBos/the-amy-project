@@ -4,7 +4,7 @@ google-genai==1.24.0
 google-generativeai==0.8.5
 
 # Memory system
-mem0==0.1.0  # Coming soon - for LTM vector/graph memory
+mem0ai==0.1.114  # For LTM vector/graph memory
 
 # Audio processing
 openai-whisper==20231117  # For audio transcription

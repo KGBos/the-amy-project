@@ -10,7 +10,7 @@ import os
 import json
 
 from .stm import ShortTermMemory
-from .ltm import LongTermMemory
+from .ltm import LTM as LongTermMemory
 
 logger = logging.getLogger(__name__)
 
@@ -57,16 +57,11 @@ class MemoryManager:
         # Extract facts for LTM (if user message)
         if role == 'user':
             facts = self.ltm.extract_facts_from_conversation([{'role': role, 'content': content}])
-            for fact in facts:
+            for fact_content, fact_type in facts:
                 try:
-                    if ': ' in fact:
-                        fact_type, fact_content = fact.split(': ', 1)
-                        self.ltm.store_fact(fact_type, fact_content)
-                    else:
-                        # Handle facts without type prefix
-                        self.ltm.store_fact('general', fact)
+                    self.ltm.store_fact(fact_content, fact_type)
                 except Exception as e:
-                    logger.warning(f"Failed to process fact '{fact}': {e}")
+                    logger.warning(f"Failed to process fact '{fact_content}' of type '{fact_type}': {e}")
                 
         logger.info(f"Processed message through memory systems: {session_id} - {role}")
         

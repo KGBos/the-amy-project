@@ -4,7 +4,9 @@ Custom memory service for ADK that uses our MemoryManager
 
 from google.adk.memory import BaseMemoryService
 from app.features.memory import MemoryManager
+from app.features.sensory.audio_transcription import AudioTranscriber
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +16,7 @@ class AmyMemoryService(BaseMemoryService):
     def __init__(self):
         super().__init__()
         self.memory_manager = MemoryManager()
+        self.audio_transcriber = AudioTranscriber()
         self.session_mappings = {}  # Map ADK session IDs to our session IDs
     
     def _get_session_id(self, user_id: str, session_id: str) -> str:
@@ -28,19 +31,30 @@ class AmyMemoryService(BaseMemoryService):
         """Add a message to memory using our MemoryManager."""
         try:
             our_session_id = self._get_session_id(user_id, session_id)
+
+            # Check for audio input and transcribe if available
+            audio_path = kwargs.get("audio_path")
+            if audio_path:
+                logger.info(f"Audio path provided: {audio_path}. Attempting transcription.")
+                transcribed_content = self.audio_transcriber.transcribe_audio(audio_path)
+                if transcribed_content:
+                    content = transcribed_content
+                    logger.info(f"Audio successfully transcribed. Using transcribed text for memory.")
+                else:
+                    logger.warning("Audio transcription failed or returned empty. Proceeding with original text content.")
             
             # Process message through our memory system
             self.memory_manager.process_message(
                 session_id=our_session_id,
-                platform="web",
+                platform="web", # Assuming 'web' for now, can be dynamically set later
                 role=role,
                 content=content,
                 user_id=user_id,
-                username="web_user"
+                username="web_user" # Assuming 'web_user' for now
             )
-            
+
             logger.info(f"Added message to memory: {role} in session {our_session_id}")
-            
+
         except Exception as e:
             logger.error(f"Error adding message to memory: {e}")
     
@@ -87,4 +101,41 @@ class AmyMemoryService(BaseMemoryService):
             }
         except Exception as e:
             logger.error(f"Error getting memory stats: {e}")
-            return {} 
+            return {}
+
+    # Implement abstract methods from BaseMemoryService
+    async def add_session_to_memory(self, session: Any):
+        """
+        Adds a session to the memory service. (Placeholder for ADK)
+        This method is required by BaseMemoryService, but our MemoryManager handles
+        message processing directly via add_message.
+        """
+        logger.info(f"ADK's add_session_to_memory called for session ID: {session.session_id}. Delegating to MemoryManager via add_message.")
+        # Our MemoryManager processes messages individually, so we can iterate through session messages if needed.
+        # For now, we assume add_message is the primary ingestion point.
+        pass
+
+    async def search_memory(self, *, app_name: str, user_id: str, query: str) -> dict:
+        """
+        Searches for memories that match the query. (Placeholder for ADK)
+        This method is required by BaseMemoryService. We will use our MemoryManager's
+        get_context_for_query for basic implementation.
+        """
+        logger.info(f"ADK's search_memory called for user: {user_id}, query: {query}")
+        # Use our existing MemoryManager to get context
+        context = self.memory_manager.get_context_for_query(f"web_{user_id}_adk_search", query)
+
+        # Convert context string to a list of MemoryEntry-like dictionaries
+        # ADK expects a list of MemoryEntry objects for SearchMemoryResponse
+        # For simplicity, we'll return the context as a single 'memory' entry.
+        memories = []
+        if context:
+            # Create a dummy MemoryEntry-like structure from the context string
+            memories.append({
+                "text": context,
+                "metadata": {"source": "amy_memory_manager", "query": query}
+            })
+        
+        # Return a dictionary that matches SearchMemoryResponse structure for now.
+        # A proper ADK integration would involve converting to actual MemoryEntry objects.
+        return {"memories": memories} 
