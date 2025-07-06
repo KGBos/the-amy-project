@@ -185,93 +185,89 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text("Sorry, I encountered an error processing your voice message. Please try sending it as text instead.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle a text message and pass it to Amy using the memory system."""
-    if not update.message or not update.message.text or update.message.from_user is None or update.message.from_user.is_bot:
-        logger.info("Ignoring non-text message or message from bot.")
+    """Handle incoming messages."""
+    if not update.message or not update.message.text:
         return
-
-    user_message = update.message.text
-    chat_id = str(update.message.chat_id)
-    user_id = str(update.message.from_user.id)
-    username = update.message.from_user.username or 'unknown'
+        
+    user_id = str(update.effective_user.id)
+    username = update.effective_user.username
+    chat_id = update.effective_chat.id
+    message_text = update.message.text
+    session_id = f"telegram_{user_id}"
     
-    # Create session ID for this conversation
-    session_id = f"telegram_{chat_id}"
-    
-    # Log the user message
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # Log the incoming message
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     logger.info(f"--- USER MESSAGE ({timestamp}) ---")
     logger.info(f"User ID: {user_id}, Username: {username}, Chat ID: {chat_id}")
-    logger.info(f"Message: {user_message}")
+    logger.info(f"Message: {message_text}")
     
-    try:
-        # Process user message through memory system
-        memory_manager.process_message(
-            session_id=session_id,
-            platform="telegram",
-            role="user",
-            content=user_message,
-            user_id=user_id,
-            username=username
+    # Load user-specific memory if this is a new conversation
+    if not memory_manager.stm.get_context(session_id):
+        logger.info(f"New conversation detected for user {user_id}, loading user-specific memory...")
+        memory_manager._load_previous_conversations_for_user(user_id)
+    
+    # Process the message through memory systems
+    memory_manager.process_message(
+        session_id=session_id,
+        platform="telegram",
+        role="user",
+        content=message_text,
+        user_id=user_id,
+        username=username
+    )
+    
+    # Build context for the response
+    context = memory_manager.get_context_for_query(session_id, message_text)
+    
+    # Create the conversation prompt with context
+    system_prompt = "You are Amy, a helpful and friendly AI assistant with memory. You can remember past conversations and learn about users over time. Respond directly to the user's message in a conversational way, using context from previous conversations when relevant."
+    
+    # Build the full prompt with context
+    if context:
+        full_prompt = f"{system_prompt}\n\n{context}\n\nUser: {message_text}\nAmy:"
+    else:
+        full_prompt = f"{system_prompt}\n\nUser: {message_text}\nAmy:"
+    
+    # Log the context being sent to Amy
+    logger.info("--- CONTEXT FOR AMY ---")
+    logger.info(f"Context length: {len(context)} characters")
+    logger.info(f"Context: {context}")
+    
+    # Generate response using Google Generative AI
+    response = model.generate_content(
+        full_prompt,
+        generation_config=genai.GenerationConfig(
+            temperature=0.7,
+            top_p=0.8,
+            top_k=40,
+            max_output_tokens=1024,
         )
-        
-        # Build context for Amy's response
-        context = memory_manager.get_context_for_query(session_id, user_message)
-        
-        # Create the conversation prompt with context
-        system_prompt = "You are Amy, a helpful and friendly AI assistant with memory. You can remember past conversations and learn about users over time. Respond directly to the user's message in a conversational way, using context from previous conversations when relevant."
-        
-        # Build the full prompt with context
-        if context:
-            full_prompt = f"{system_prompt}\n\n{context}\n\nUser: {user_message}\nAmy:"
-        else:
-            full_prompt = f"{system_prompt}\n\nUser: {user_message}\nAmy:"
-        
-        # Log the context being used
-        logger.info(f"--- CONTEXT FOR AMY ---")
-        logger.info(f"Context length: {len(context)} characters")
-        if context:
-            logger.info(f"Context: {context[:200]}...")
-        
-        # Generate response using Google Generative AI
-        response = model.generate_content(
-            full_prompt,
-            generation_config=genai.GenerationConfig(
-                temperature=0.7,
-                top_p=0.8,
-                top_k=40,
-                max_output_tokens=1024,
-            )
-        )
-        
-        # Check if response was blocked by safety filters
-        if response.candidates and response.candidates[0].finish_reason == 2:
-            amy_response = "I apologize, but I'm unable to respond to that message due to content safety filters. Could you please rephrase your message?"
-        elif response.text:
-            amy_response = response.text
-        else:
-            amy_response = "I'm sorry, I encountered an issue generating a response. Please try again."
-        
-        # Process Amy's response through memory system
-        memory_manager.process_message(
-            session_id=session_id,
-            platform="telegram",
-            role="model",
-            content=amy_response,
-            user_id=user_id,
-            username=username
-        )
-        
-        # Log the response
-        logger.info(f"--- AMY RESPONSE ({timestamp}) ---")
-        logger.info(f"Response: {amy_response}")
-        
-        # Send response back to Telegram
-        await update.message.reply_text(amy_response)
-        
-    except Exception as e:
-        logger.error(f"Error processing message: {e}")
-        await update.message.reply_text("Sorry, I encountered an error processing your message. Please try again.")
+    )
+    
+    # Check if response was blocked by safety filters
+    if response.candidates and response.candidates[0].finish_reason == 2:
+        amy_response = "I apologize, but I'm unable to respond to that message due to content safety filters. Could you please rephrase your message?"
+    elif response.text:
+        amy_response = response.text
+    else:
+        amy_response = "I'm sorry, I encountered an issue generating a response. Please try again."
+    
+    # Process Amy's response through memory systems
+    memory_manager.process_message(
+        session_id=session_id,
+        platform="telegram",
+        role="model",
+        content=amy_response,
+        user_id=user_id,
+        username=username
+    )
+    
+    # Log Amy's response
+    logger.info(f"--- AMY RESPONSE ({timestamp}) ---")
+    logger.info(f"Response: {amy_response}")
+    
+    # Send the response
+    await update.message.reply_text(amy_response)
 
 def main():
     """Start the bot."""

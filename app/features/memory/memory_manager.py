@@ -94,6 +94,66 @@ class MemoryManager:
         except Exception as e:
             logger.error(f"Error loading previous conversations: {e}")
             
+    def _load_previous_conversations_for_user(self, user_id: str) -> None:
+        """
+        Load previous conversations from database for a specific user and extract facts for LTM.
+        This ensures Amy remembers information across sessions for the specific user.
+        
+        Args:
+            user_id: The user ID to load conversations for
+        """
+        if not os.path.exists(self.db_path):
+            logger.info("No existing database found. Starting with fresh memory.")
+            return
+            
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Get messages from previous conversations for this specific user
+            cursor.execute("""
+                SELECT m.content, m.role, m.timestamp, c.session_id, c.user_id, c.username
+                FROM messages m
+                JOIN conversations c ON m.conversation_id = c.id
+                WHERE c.user_id = ?
+                ORDER BY m.timestamp
+            """, (user_id,))
+            
+            messages = cursor.fetchall()
+            conn.close()
+            
+            if not messages:
+                logger.info(f"No previous conversations found for user {user_id}.")
+                return
+                
+            logger.info(f"Loading {len(messages)} previous messages for user {user_id} into memory...")
+            
+            # Extract facts from previous conversations
+            conversation_messages = []
+            for content, role, timestamp, session_id, user_id, username in messages:
+                conversation_messages.append({
+                    'role': role,
+                    'content': content,
+                    'timestamp': timestamp,
+                    'session_id': session_id,
+                    'user_id': user_id,
+                    'username': username
+                })
+                
+                # Process in batches to avoid overwhelming the system
+                if len(conversation_messages) >= 50:
+                    self._extract_facts_from_batch(conversation_messages)
+                    conversation_messages = []
+            
+            # Process remaining messages
+            if conversation_messages:
+                self._extract_facts_from_batch(conversation_messages)
+                
+            logger.info(f"Finished loading previous conversations for user {user_id} into LTM.")
+            
+        except Exception as e:
+            logger.error(f"Error loading previous conversations for user {user_id}: {e}")
+        
     def _extract_facts_from_batch(self, messages: List[Dict]) -> None:
         """
         Extract facts from a batch of messages and store them in LTM.
