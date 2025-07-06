@@ -217,7 +217,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     )
     
     # Build context for the response
-    context = memory_manager.get_context_for_query(session_id, message_text)
+    context = memory_manager.get_context_for_query(session_id, message_text, user_id)
     
     # Create the conversation prompt with context
     system_prompt = "You are Amy, a helpful and friendly AI assistant with memory. You can remember past conversations and learn about users over time. Respond directly to the user's message in a conversational way, using context from previous conversations when relevant."

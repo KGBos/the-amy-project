@@ -197,19 +197,20 @@ class MemoryManager:
             facts = self.ltm.extract_facts_from_conversation([{'role': role, 'content': content}])
             for fact_content, fact_type in facts:
                 try:
-                    self.ltm.store_fact(fact_content, fact_type)
+                    self.ltm.store_fact(fact_content, fact_type, user_id)
                 except Exception as e:
                     logger.warning(f"Failed to process fact '{fact_content}' of type '{fact_type}': {e}")
                 
         logger.info(f"Processed message through memory systems: {session_id} - {role}")
         
-    def get_context_for_query(self, session_id: str, query: str) -> str:
+    def get_context_for_query(self, session_id: str, query: str, user_id: Optional[str] = None) -> str:
         """
         Build comprehensive context for a query using all memory systems.
         
         Args:
             session_id: Current session ID
             query: The user's query
+            user_id: User ID for filtering LTM search results
             
         Returns:
             Comprehensive context string
@@ -232,8 +233,8 @@ class MemoryManager:
         #     context_parts.append(episodic_context)
         #     context_parts.append("")
             
-        # Get LTM context (relevant facts)
-        ltm_context = self.ltm.build_context_from_query(query)
+        # Get LTM context (relevant facts) - filter by user_id
+        ltm_context = self.ltm.build_context_from_query(query, user_id)
         if ltm_context:
             context_parts.append(ltm_context)
             context_parts.append("")

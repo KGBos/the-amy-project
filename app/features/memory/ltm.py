@@ -56,14 +56,14 @@ class LTM(BaseMemory):
                 with open(self.json_file_path, 'w') as f:
                     json.dump([], f)
         
-    def store_fact(self, fact_text: str, fact_type: str) -> str:
+    def store_fact(self, fact_text: str, fact_type: str, user_id: Optional[str] = None) -> str:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         fact_id = f"{fact_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
         # Always use JSON fallback for now
-        return self._store_fact_json(fact_text, fact_type, timestamp)
+        return self._store_fact_json(fact_text, fact_type, timestamp, user_id)
     
-    def _store_fact_json(self, fact_text: str, fact_type: str, timestamp: str) -> str:
+    def _store_fact_json(self, fact_text: str, fact_type: str, timestamp: str, user_id: Optional[str] = None) -> str:
         """
         Fallback JSON storage method.
         """
@@ -71,8 +71,9 @@ class LTM(BaseMemory):
             'id': f"{fact_type}_{timestamp}",
             'type': fact_type,
             'content': fact_text,
-            'metadata': {"timestamp": timestamp},
+            'metadata': {"timestamp": timestamp, "user_id": user_id},
             'created_at': timestamp,
+            'user_id': user_id,
             'embedding': None # We don't generate embeddings for JSON fallback
         }
         
@@ -91,18 +92,23 @@ class LTM(BaseMemory):
         with open(self.json_file_path, 'w') as f:
             json.dump(file_data, f, indent=2)
             
-        logger.info(f"Stored fact in JSON LTM: {fact_type} - {fact_text[:50]}...")
+        logger.info(f"Stored fact in JSON LTM: {fact_type} - {fact_text[:50]}... (user: {user_id})")
         return f"{fact_type}_{timestamp}"
         
-    def search_facts(self, query: str, fact_type: Optional[str] = None) -> List[Dict]:
+    def search_facts(self, query: str, fact_type: Optional[str] = None, user_id: Optional[str] = None) -> List[Dict]:
         """
         Search for facts by content similarity using JSON fallback.
+        
+        Args:
+            query: Search query
+            fact_type: Optional fact type filter
+            user_id: Optional user ID filter to only return facts from this user
         """
         limit = 5 # Default limit for search results internally
         # Always use JSON fallback for now
-        return self._search_facts_json(query, fact_type, limit)
+        return self._search_facts_json(query, fact_type, limit, user_id)
     
-    def _search_facts_json(self, query: str, fact_type: Optional[str] = None, limit: int = 5) -> List[Dict]:
+    def _search_facts_json(self, query: str, fact_type: Optional[str] = None, limit: int = 5, user_id: Optional[str] = None) -> List[Dict]:
         """
         Fallback JSON search method.
         """
@@ -115,39 +121,49 @@ class LTM(BaseMemory):
                     facts = json.load(f)
                 except json.JSONDecodeError:
                     facts = [] # Handle empty or malformed JSON
-                logger.debug(f"[LTM JSON Search] Query: '{query}', Fact Type: {fact_type}") # DEBUG: Log search query
+                logger.debug(f"[LTM JSON Search] Query: '{query}', Fact Type: {fact_type}, User ID: {user_id}") # DEBUG: Log search query
                 
                 # First, look for exact matches in personal_info facts (names, etc.)
                 for fact in facts:
                     fact_content = fact.get('content', '')
                     fact_current_type = fact.get('type', 'unknown')
+                    fact_user_id = fact.get('user_id', None)
+                    
+                    # Filter by user_id if provided
+                    if user_id and fact_user_id != user_id:
+                        continue
                     
                     # Prioritize personal_info facts for name searches
                     if fact_current_type == 'personal_info':
                         # Check for exact name matches
                         if query.lower().strip() in fact_content.lower():
                             matching_facts.append(fact)
-                            logger.debug(f"[LTM JSON Search] PERSONAL_INFO MATCH found: {fact['id']}")
+                            logger.debug(f"[LTM JSON Search] PERSONAL_INFO MATCH found: {fact['id']} (user: {fact_user_id})")
                         # Check for standalone names
                         elif len(query.strip()) <= 20 and query.strip().isalpha() and fact_content.strip().isalpha():
                             if query.lower().strip() in fact_content.lower() or fact_content.lower().strip() in query.lower():
                                 matching_facts.append(fact)
-                                logger.debug(f"[LTM JSON Search] NAME MATCH found: {fact['id']}")
+                                logger.debug(f"[LTM JSON Search] NAME MATCH found: {fact['id']} (user: {fact_user_id})")
                 
                 # Then look for general content matches
                 for fact in facts:
                     fact_content = fact.get('content', '')
                     fact_current_type = fact.get('type', 'unknown')
+                    fact_user_id = fact.get('user_id', None)
+                    
+                    # Filter by user_id if provided
+                    if user_id and fact_user_id != user_id:
+                        continue
                     
                     # Skip if we already found this fact
                     if fact in matching_facts:
                         continue
                         
-                    logger.debug(f"[LTM JSON Search] Checking fact: Content='{fact_content[:50]}...', Type='{fact_current_type}'")
+                    logger.debug(f"[LTM JSON Search] Checking fact: Content='{fact_content[:50]}...', Type='{fact_current_type}', User: {fact_user_id}")
                     if query.lower() in fact_content.lower():
                         if fact_type is None or fact_current_type == fact_type:
                             matching_facts.append(fact)
-                            logger.debug(f"[LTM JSON Search] MATCH found: {fact['id']}") # DEBUG: Log match
+                            logger.debug(f"[LTM JSON Search] MATCH found: {fact['id']} (user: {fact_user_id})") # DEBUG: Log match
                             
         return matching_facts[:limit]
         
@@ -223,18 +239,19 @@ class LTM(BaseMemory):
 
         return facts
         
-    def build_context_from_query(self, query: str) -> str:
+    def build_context_from_query(self, query: str, user_id: Optional[str] = None) -> str:
         """
         Build relevant context for a query using LTM.
         
         Args:
             query: The current query
+            user_id: Optional user ID to filter facts by user
             
         Returns:
             Relevant context string
         """
         # Search for relevant facts (limit is handled internally by search_facts)
-        relevant_facts = self.search_facts(query)
+        relevant_facts = self.search_facts(query, user_id=user_id)
         
         if not relevant_facts:
             return ""
