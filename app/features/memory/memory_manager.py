@@ -8,6 +8,7 @@ from datetime import datetime
 import logging
 import os
 import json
+import sqlite3
 
 from .stm import ShortTermMemory
 from .ltm import LTM as LongTermMemory
@@ -28,10 +29,87 @@ class MemoryManager:
             db_path: Path to the SQLite database for EpTM (coming soon)
             vector_db_path: Path to the vector database for LTM
         """
+        self.db_path = db_path
         self.stm = ShortTermMemory()
         self.ltm = LongTermMemory(vector_db_path)
         # TODO: Add EpTM when implemented
         # self.episodic = EpisodicMemory(db_path)
+        
+        # Load previous conversations and extract facts
+        self._load_previous_conversations()
+        
+    def _load_previous_conversations(self) -> None:
+        """
+        Load previous conversations from database and extract facts for LTM.
+        This ensures Amy remembers information across sessions.
+        """
+        if not os.path.exists(self.db_path):
+            logger.info("No existing database found. Starting with fresh memory.")
+            return
+            
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Get all messages from previous conversations
+            cursor.execute("""
+                SELECT m.content, m.role, m.timestamp, c.session_id, c.user_id, c.username
+                FROM messages m
+                JOIN conversations c ON m.conversation_id = c.id
+                ORDER BY m.timestamp
+            """)
+            
+            messages = cursor.fetchall()
+            conn.close()
+            
+            if not messages:
+                logger.info("No previous conversations found in database.")
+                return
+                
+            logger.info(f"Loading {len(messages)} previous messages into memory...")
+            
+            # Extract facts from previous conversations
+            conversation_messages = []
+            for content, role, timestamp, session_id, user_id, username in messages:
+                conversation_messages.append({
+                    'role': role,
+                    'content': content,
+                    'timestamp': timestamp,
+                    'session_id': session_id,
+                    'user_id': user_id,
+                    'username': username
+                })
+                
+                # Process in batches to avoid overwhelming the system
+                if len(conversation_messages) >= 50:
+                    self._extract_facts_from_batch(conversation_messages)
+                    conversation_messages = []
+            
+            # Process remaining messages
+            if conversation_messages:
+                self._extract_facts_from_batch(conversation_messages)
+                
+            logger.info("Finished loading previous conversations into LTM.")
+            
+        except Exception as e:
+            logger.error(f"Error loading previous conversations: {e}")
+            
+    def _extract_facts_from_batch(self, messages: List[Dict]) -> None:
+        """
+        Extract facts from a batch of messages and store them in LTM.
+        
+        Args:
+            messages: List of message dictionaries
+        """
+        try:
+            facts = self.ltm.extract_facts_from_conversation(messages)
+            for fact_content, fact_type in facts:
+                try:
+                    self.ltm.store_fact(fact_content, fact_type)
+                except Exception as e:
+                    logger.warning(f"Failed to store fact '{fact_content[:50]}...' of type '{fact_type}': {e}")
+        except Exception as e:
+            logger.error(f"Error extracting facts from batch: {e}")
         
     def process_message(self, session_id: str, platform: str, role: str, content: str, 
                        user_id: Optional[str] = None, username: Optional[str] = None) -> None:

@@ -42,6 +42,19 @@ class LTM(BaseMemory):
             with open(self.json_file_path, 'w') as f:
                 json.dump([], f)
             logger.info(f"Created empty LTM JSON file: {self.json_file_path}")
+        else:
+            # Check if the file has data
+            try:
+                with open(self.json_file_path, 'r') as f:
+                    data = json.load(f)
+                if data:
+                    logger.info(f"Loaded existing LTM data with {len(data)} facts")
+                else:
+                    logger.info(f"LTM file exists but is empty")
+            except json.JSONDecodeError:
+                logger.warning(f"LTM file exists but is corrupted, creating new one")
+                with open(self.json_file_path, 'w') as f:
+                    json.dump([], f)
         
     def store_fact(self, fact_text: str, fact_type: str) -> str:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -103,14 +116,39 @@ class LTM(BaseMemory):
                 except json.JSONDecodeError:
                     facts = [] # Handle empty or malformed JSON
                 logger.debug(f"[LTM JSON Search] Query: '{query}', Fact Type: {fact_type}") # DEBUG: Log search query
+                
+                # First, look for exact matches in personal_info facts (names, etc.)
                 for fact in facts:
                     fact_content = fact.get('content', '')
                     fact_current_type = fact.get('type', 'unknown')
+                    
+                    # Prioritize personal_info facts for name searches
+                    if fact_current_type == 'personal_info':
+                        # Check for exact name matches
+                        if query.lower().strip() in fact_content.lower():
+                            matching_facts.append(fact)
+                            logger.debug(f"[LTM JSON Search] PERSONAL_INFO MATCH found: {fact['id']}")
+                        # Check for standalone names
+                        elif len(query.strip()) <= 20 and query.strip().isalpha() and fact_content.strip().isalpha():
+                            if query.lower().strip() in fact_content.lower() or fact_content.lower().strip() in query.lower():
+                                matching_facts.append(fact)
+                                logger.debug(f"[LTM JSON Search] NAME MATCH found: {fact['id']}")
+                
+                # Then look for general content matches
+                for fact in facts:
+                    fact_content = fact.get('content', '')
+                    fact_current_type = fact.get('type', 'unknown')
+                    
+                    # Skip if we already found this fact
+                    if fact in matching_facts:
+                        continue
+                        
                     logger.debug(f"[LTM JSON Search] Checking fact: Content='{fact_content[:50]}...', Type='{fact_current_type}'")
                     if query.lower() in fact_content.lower():
                         if fact_type is None or fact_current_type == fact_type:
                             matching_facts.append(fact)
                             logger.debug(f"[LTM JSON Search] MATCH found: {fact['id']}") # DEBUG: Log match
+                            
         return matching_facts[:limit]
         
     def get_facts_by_type(self, fact_type: str) -> List[Dict]:
@@ -153,16 +191,23 @@ class LTM(BaseMemory):
 
             # Simple fact extraction patterns (will be enhanced with NLP)
             if role == 'user':
+                # Look for name introductions
+                if any(phrase in content.lower() for phrase in ['my name is', 'i am', 'call me', 'i\'m']):
+                    facts.append((content, "personal_info"))
+                # Look for standalone names (likely name introductions)
+                elif len(content.strip()) <= 20 and content.strip().isalpha() and content.strip().istitle():
+                    facts.append((content, "personal_info"))
+                
                 # Look for preference statements
-                if any(phrase in content.lower() for phrase in ['i like', 'i prefer', 'i love', 'i hate']):
+                elif any(phrase in content.lower() for phrase in ['i like', 'i prefer', 'i love', 'i hate', 'i enjoy']):
                     facts.append((content, "preference"))
 
                 # Look for relationship information
-                if any(phrase in content.lower() for phrase in ['my name is', 'i am', 'i work at', 'i live in']):
+                elif any(phrase in content.lower() for phrase in ['i work at', 'i live in', 'i study', 'i go to']):
                     facts.append((content, "personal_info"))
 
                 # Look for goals and plans
-                if any(phrase in content.lower() for phrase in ['i want to', 'i plan to', 'i need to', 'my goal is']):
+                elif any(phrase in content.lower() for phrase in ['i want to', 'i plan to', 'i need to', 'my goal is']):
                     facts.append((content, "goal"))
 
                 # Always add the full user message as a 'general' fact if not already categorized
