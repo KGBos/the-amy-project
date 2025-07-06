@@ -3,286 +3,179 @@ Long-Term Memory (LTM) for Amy using Mem0
 Handles semantic search and knowledge storage using Mem0 vector database
 """
 
-from typing import Dict, List, Optional, Any
-from datetime import datetime
 import logging
 import json
 import os
+from datetime import datetime
+from typing import List, Dict, Optional, Any, Tuple
 
-try:
-    import mem0
-    from mem0 import Memory
-    MEM0_AVAILABLE = True
-except ImportError:
-    MEM0_AVAILABLE = False
-    logging.warning("Mem0 not available, falling back to JSON storage")
+# from mem0 import Memory # Temporarily removed mem0 import
+from .base import BaseMemory
 
 logger = logging.getLogger(__name__)
 
-class LongTermMemory:
+class LTM(BaseMemory):
     """
-    Long-Term Memory system using Mem0 for semantic knowledge storage and retrieval.
-    Uses vector embeddings for similarity search and fact extraction.
+    Long-Term Memory (LTM) system using a JSON file for semantic knowledge storage and retrieval.
+    Mem0 integration is temporarily disabled.
     """
     
     def __init__(self, vector_db_path: str = "instance/vector_db"):
         """
-        Initialize LTM with Mem0 vector database.
-        
-        Args:
-            vector_db_path: Path to the vector database storage
+        Initialize LTM with JSON file storage. Mem0 integration is temporarily disabled.
         """
-        self.vector_db_path = vector_db_path
-        self._ensure_db_exists()
-        
-        if MEM0_AVAILABLE:
-            try:
-                # Configure Mem0 with local file storage (Milvus Lite)
-                config = {
-                    "vector_store": {
-                        "provider": "milvus",
-                        "config": {
-                            "collection_name": "amy_ltm",
-                            "embedding_model_dims": "1536",
-                            "url": f"{vector_db_path}/milvus.db",  # Local file storage
-                        },
-                    },
-                    "version": "v1.1",
-                }
-                
-                # Initialize Mem0 memory
-                self.memory = Memory.from_config(config)
-                logger.info("Initialized Mem0-based LTM with local Milvus storage")
-            except Exception as e:
-                logger.error(f"Failed to initialize Mem0: {e}")
-                self.memory = None
-        else:
-            self.memory = None
-            logger.warning("Mem0 not available, using JSON fallback")
+        self.vector_db_path = vector_db_path # Still keep for consistency in pathing for JSON file
+        self.milvus_collection_name = "amy_memories" # Keep for potential future Mem0 re-integration
+        self.memory = None # Mem0 is not used for now
+
+        self.json_file_path = os.path.join(self.vector_db_path, 'ltm_memory.json') # JSON file in vector_db_path
+        self._ensure_db_exists() # Ensure JSON DB exists on initialization
+        logger.info("LTM initialized using JSON fallback. Mem0 integration temporarily disabled.")
+        logger.info(f"DEBUG LTM: vector_db_path={self.vector_db_path}, json_file_path={self.json_file_path}")
         
     def _ensure_db_exists(self) -> None:
-        """Ensure the vector database directory exists."""
-        os.makedirs(self.vector_db_path, exist_ok=True)
-        
-    def store_fact(self, fact_type: str, content: str, metadata: Optional[Dict] = None) -> str:
         """
-        Store a fact in long-term memory using Mem0.
-        
-        Args:
-            fact_type: Type of fact (preference, relationship, goal, etc.)
-            content: The fact content
-            metadata: Additional metadata
-            
-        Returns:
-            Fact ID
+        Ensure the JSON file for fallback exists.
         """
+        os.makedirs(os.path.dirname(self.json_file_path), exist_ok=True) # Ensure directory exists
+        if not os.path.exists(self.json_file_path):
+            with open(self.json_file_path, 'w') as f:
+                json.dump([], f)
+            logger.info(f"Created empty LTM JSON file: {self.json_file_path}")
+        
+    def store_fact(self, fact_text: str, fact_type: str) -> str:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         fact_id = f"{fact_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        if MEM0_AVAILABLE and self.memory:
-            try:
-                # Store in Mem0 with metadata
-                fact_metadata = {
-                    'id': fact_id,
-                    'type': fact_type,
-                    'created_at': datetime.now().isoformat(),
-                    **(metadata or {})
-                }
-                
-                # Add to Mem0 memory
-                result = self.memory.add(
-                    messages=content,
-                    user_id="amy_user",
-                    metadata=fact_metadata
-                )
-                
-                logger.info(f"Stored fact in Mem0 LTM: {fact_type} - {content[:50]}...")
-                return fact_id
-                
-            except Exception as e:
-                logger.error(f"Failed to store fact in Mem0: {e}")
-                # Fall back to JSON storage
-                return self._store_fact_json(fact_id, fact_type, content, metadata)
-        else:
-            # Fall back to JSON storage
-            return self._store_fact_json(fact_id, fact_type, content, metadata)
+        # Always use JSON fallback for now
+        return self._store_fact_json(fact_text, fact_type, timestamp)
     
-    def _store_fact_json(self, fact_id: str, fact_type: str, content: str, metadata: Optional[Dict] = None) -> str:
-        """Fallback JSON storage method."""
+    def _store_fact_json(self, fact_text: str, fact_type: str, timestamp: str) -> str:
+        """
+        Fallback JSON storage method.
+        """
         fact_data = {
-            'id': fact_id,
+            'id': f"{fact_type}_{timestamp}",
             'type': fact_type,
-            'content': content,
-            'metadata': metadata or {},
-            'created_at': datetime.now().isoformat(),
-            'embedding': None
+            'content': fact_text,
+            'metadata': {"timestamp": timestamp},
+            'created_at': timestamp,
+            'embedding': None # We don't generate embeddings for JSON fallback
         }
         
-        fact_file = os.path.join(self.vector_db_path, f"{fact_id}.json")
-        with open(fact_file, 'w') as f:
-            json.dump(fact_data, f, indent=2)
-            
-        logger.info(f"Stored fact in JSON LTM: {fact_type} - {content[:50]}...")
-        return fact_id
-        
-    def search_facts(self, query: str, fact_type: Optional[str] = None, limit: int = 10) -> List[Dict]:
-        """
-        Search for facts by content similarity using Mem0.
-        
-        Args:
-            query: Search query
-            fact_type: Optional filter by fact type
-            limit: Maximum number of results
-            
-        Returns:
-            List of matching facts
-        """
-        if MEM0_AVAILABLE and self.memory:
-            try:
-                # Search using Mem0
-                search_results = self.memory.search(
-                    query=query,
-                    user_id="amy_user",
-                    limit=limit * 2  # Get more results to filter by type
-                )
-                
-                # Convert results to our format
-                facts = []
-                for result in search_results.get('results', []):
-                    # Filter by type if specified
-                    if fact_type and result.get('metadata', {}).get('type') != fact_type:
-                        continue
-                    
-                    facts.append({
-                        'id': result.get('id'),
-                        'type': result.get('metadata', {}).get('type'),
-                        'content': result.get('memory'),
-                        'metadata': result.get('metadata', {}),
-                        'created_at': result.get('created_at'),
-                        'similarity_score': result.get('score', 0.0)
-                    })
-                
-                return facts[:limit]
-                
-            except Exception as e:
-                logger.error(f"Failed to search facts in Mem0: {e}")
-                # Fall back to JSON search
-                return self._search_facts_json(query, fact_type, limit)
-        else:
-            # Fall back to JSON search
-            return self._search_facts_json(query, fact_type, limit)
-    
-    def _search_facts_json(self, query: str, fact_type: Optional[str] = None, limit: int = 10) -> List[Dict]:
-        """Fallback JSON search method."""
-        results = []
-        
-        for filename in os.listdir(self.vector_db_path):
-            if filename.endswith('.json'):
-                fact_file = os.path.join(self.vector_db_path, filename)
+        # Read existing data, append new fact, and write back
+        file_data = []
+        if os.path.exists(self.json_file_path):
+            with open(self.json_file_path, 'r') as f:
                 try:
-                    with open(fact_file, 'r') as f:
-                        fact_data = json.load(f)
-                        
-                    # Filter by type if specified
-                    if fact_type and fact_data.get('type') != fact_type:
-                        continue
-                        
-                    # Simple text matching
-                    if query.lower() in fact_data.get('content', '').lower():
-                        results.append(fact_data)
-                        
-                except Exception as e:
-                    logger.warning(f"Error reading fact file {filename}: {e}")
-                    
-        # Sort by creation time (newest first)
-        results.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-        return results[:limit]
+                    file_data = json.load(f)
+                except json.JSONDecodeError:
+                    file_data = [] # Handle empty or malformed JSON
+        
+        file_data.append(fact_data)
+        logger.debug(f"[LTM JSON Store] Appending fact_data: {fact_data}") # DEBUG: Log data being appended
+        
+        with open(self.json_file_path, 'w') as f:
+            json.dump(file_data, f, indent=2)
+            
+        logger.info(f"Stored fact in JSON LTM: {fact_type} - {fact_text[:50]}...")
+        return f"{fact_type}_{timestamp}"
+        
+    def search_facts(self, query: str, fact_type: Optional[str] = None) -> List[Dict]:
+        """
+        Search for facts by content similarity using JSON fallback.
+        """
+        limit = 5 # Default limit for search results internally
+        # Always use JSON fallback for now
+        return self._search_facts_json(query, fact_type, limit)
+    
+    def _search_facts_json(self, query: str, fact_type: Optional[str] = None, limit: int = 5) -> List[Dict]:
+        """
+        Fallback JSON search method.
+        """
+        # This is a very basic search, in a real app you'd want more sophisticated text matching
+        # For now, it just checks if the query is in the content of the facts.
+        matching_facts = []
+        if os.path.exists(self.json_file_path):
+            with open(self.json_file_path, 'r') as f:
+                try:
+                    facts = json.load(f)
+                except json.JSONDecodeError:
+                    facts = [] # Handle empty or malformed JSON
+                logger.debug(f"[LTM JSON Search] Query: '{query}', Fact Type: {fact_type}") # DEBUG: Log search query
+                for fact in facts:
+                    fact_content = fact.get('content', '')
+                    fact_current_type = fact.get('type', 'unknown')
+                    logger.debug(f"[LTM JSON Search] Checking fact: Content='{fact_content[:50]}...', Type='{fact_current_type}'")
+                    if query.lower() in fact_content.lower():
+                        if fact_type is None or fact_current_type == fact_type:
+                            matching_facts.append(fact)
+                            logger.debug(f"[LTM JSON Search] MATCH found: {fact['id']}") # DEBUG: Log match
+        return matching_facts[:limit]
         
     def get_facts_by_type(self, fact_type: str) -> List[Dict]:
         """
-        Get all facts of a specific type.
-        
-        Args:
-            fact_type: Type of facts to retrieve
-            
-        Returns:
-            List of facts of the specified type
+        Retrieve facts by type using JSON fallback.
         """
-        if MEM0_AVAILABLE and self.memory:
-            try:
-                # Get all facts and filter by type
-                all_results = self.memory.get_all(user_id="amy_user")
-                
-                # Filter by type
-                facts = []
-                for result in all_results.get('results', []):
-                    if result.get('metadata', {}).get('type') == fact_type:
-                        facts.append({
-                            'id': result.get('id'),
-                            'type': result.get('metadata', {}).get('type'),
-                            'content': result.get('memory'),
-                            'metadata': result.get('metadata', {}),
-                            'created_at': result.get('created_at')
-                        })
-                
-                return facts
-                
-            except Exception as e:
-                logger.error(f"Failed to get facts by type in Mem0: {e}")
-                # Fall back to JSON method
-                return self._get_facts_by_type_json(fact_type)
-        else:
-            # Fall back to JSON method
-            return self._get_facts_by_type_json(fact_type)
+        # Always use JSON fallback for now
+        return self._get_facts_by_type_json(fact_type)
     
     def _get_facts_by_type_json(self, fact_type: str) -> List[Dict]:
-        """Fallback JSON method for getting facts by type."""
-        results = []
-        
-        for filename in os.listdir(self.vector_db_path):
-            if filename.endswith('.json'):
-                fact_file = os.path.join(self.vector_db_path, filename)
+        """
+        Fallback JSON method to get facts by type."""
+        filtered_facts = []
+        if os.path.exists(self.json_file_path):
+            with open(self.json_file_path, 'r') as f:
                 try:
-                    with open(fact_file, 'r') as f:
-                        fact_data = json.load(f)
-                        
-                    if fact_data.get('type') == fact_type:
-                        results.append(fact_data)
-                        
-                except Exception as e:
-                    logger.warning(f"Error reading fact file {filename}: {e}")
-                    
-        return results
+                    facts = json.load(f)
+                except json.JSONDecodeError:
+                    facts = [] # Handle empty or malformed JSON
+                for fact in facts:
+                    if fact['type'] == fact_type:
+                        filtered_facts.append(fact)
+        return filtered_facts
         
-    def extract_facts_from_conversation(self, messages: List[Dict]) -> List[str]:
+    def extract_facts_from_conversation(self, messages: List[Dict]) -> List[Tuple[str, str]]:
         """
         Extract potential facts from a conversation.
-        
+
         Args:
             messages: List of conversation messages
-            
+
         Returns:
-            List of extracted facts
+            List of extracted facts as (content, type) tuples
         """
         facts = []
-        
+
         for message in messages:
             content = message.get('content', '')
             role = message.get('role', '')
-            
+
             # Simple fact extraction patterns (will be enhanced with NLP)
             if role == 'user':
                 # Look for preference statements
                 if any(phrase in content.lower() for phrase in ['i like', 'i prefer', 'i love', 'i hate']):
-                    facts.append(f"preference: {content}")
-                    
+                    facts.append((content, "preference"))
+
                 # Look for relationship information
                 if any(phrase in content.lower() for phrase in ['my name is', 'i am', 'i work at', 'i live in']):
-                    facts.append(f"personal_info: {content}")
-                    
+                    facts.append((content, "personal_info"))
+
                 # Look for goals and plans
                 if any(phrase in content.lower() for phrase in ['i want to', 'i plan to', 'i need to', 'my goal is']):
-                    facts.append(f"goal: {content}")
-                    
+                    facts.append((content, "goal"))
+
+                # Always add the full user message as a 'general' fact if not already categorized
+                # This ensures all user input, including transcribed audio, is stored in LTM
+                # Check if the content has already been added with any specific fact type
+                already_categorized = False
+                for fact_content, _ in facts:
+                    if content == fact_content: # Check if content matches an already added fact
+                        already_categorized = True
+                        break
+                if not already_categorized:
+                    facts.append((content, "general"))
+
         return facts
         
     def build_context_from_query(self, query: str) -> str:
@@ -295,8 +188,8 @@ class LongTermMemory:
         Returns:
             Relevant context string
         """
-        # Search for relevant facts
-        relevant_facts = self.search_facts(query, limit=5)
+        # Search for relevant facts (limit is handled internally by search_facts)
+        relevant_facts = self.search_facts(query)
         
         if not relevant_facts:
             return ""
