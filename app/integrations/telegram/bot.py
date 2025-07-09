@@ -48,29 +48,103 @@ audio_transcriber = AudioTranscriber("base")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /help command."""
-    if update.message:
-        help_message = "I'm Amy, your AI assistant with memory! I can:\n• Remember our conversations\n• Learn about your preferences\n• Build context from past chats\n• Help you with various tasks\n\nJust send me a message and I'll respond with full context awareness!"
-        await update.message.reply_text(help_message)
+    help_text = """
+🤖 **Amy Bot Commands:**
+
+/help - Show this help message
+/memory - Show memory statistics
+/debug - Show current prompt structure and memory state
+
+💡 **Features:**
+• Text and voice message support
+• Memory across conversations
+• Context-aware responses
+• Fact learning and recall
+
+🛑 Press Ctrl+C to stop the bot
+"""
+    await update.message.reply_text(help_text)
 
 async def memory_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /memory command to show memory statistics."""
-    if update.message:
-        try:
-            stats = memory_manager.get_memory_stats()
-            stats_message = f"🧠 **Memory Statistics:**\n\n"
-            stats_message += f"• Active sessions: {stats['stm']['active_sessions']}\n"
-            stats_message += f"• Total conversations: {stats['mtm']['total_sessions']}\n"
-            stats_message += f"• Facts stored: {sum(stats['ltm']['fact_types'].values())}\n\n"
+    """Show memory statistics."""
+    try:
+        stats = memory_manager.get_memory_stats()
+        
+        # Format the stats
+        stm_sessions = stats['stm']['active_sessions']
+        ltm_facts = stats['ltm']['fact_types']
+        episodic_sessions = stats['episodic'].get('total_sessions', 0)
+        
+        response = f"🧠 Memory Statistics:\n\n"
+        response += f"📝 STM Active Sessions: {stm_sessions}\n"
+        response += f"🧩 EpTM Total Sessions: {episodic_sessions}\n"
+        response += f"🧠 LTM Facts by Type:\n"
+        
+        for fact_type, count in ltm_facts.items():
+            response += f"  • {fact_type}: {count}\n"
             
-            if stats['ltm']['fact_types']:
-                stats_message += "**Fact Types:**\n"
-                for fact_type, count in stats['ltm']['fact_types'].items():
-                    stats_message += f"• {fact_type}: {count}\n"
+        await update.message.reply_text(response)
+        
+    except Exception as e:
+        logger.error(f"Error getting memory stats: {e}")
+        await update.message.reply_text("Sorry, I couldn't retrieve memory statistics right now.")
+
+async def debug_prompt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the current prompt structure and memory state."""
+    try:
+        user_id = str(update.effective_user.id)
+        session_id = f"telegram_{user_id}"
+        
+        # Get detailed memory state
+        memory_state = memory_manager.get_detailed_memory_state(session_id, user_id)
+        
+        # Get current context
+        context = memory_manager.get_context_for_query(session_id, "debug", user_id)
+        
+        # Build the system prompt
+        system_prompt = "You are Amy, a helpful and friendly AI assistant with memory. You can remember past conversations and learn about users over time. Respond directly to the user's message in a conversational way, using context from previous conversations when relevant."
+        
+        # Build the full prompt
+        if context:
+            full_prompt = f"{system_prompt}\n\n{context}\n\nUser: debug\nAmy:"
+        else:
+            full_prompt = f"{system_prompt}\n\nUser: debug\nAmy:"
+        
+        # Format the debug info
+        debug_info = f"🔍 PROMPT DEBUG INFO:\n\n"
+        debug_info += f"📊 System Prompt Length: {len(system_prompt)} chars\n"
+        debug_info += f"🧠 Context Length: {len(context)} chars\n"
+        debug_info += f"📝 Total Prompt Length: {len(full_prompt)} chars\n\n"
+        
+        # Add memory state
+        debug_info += f"🧠 MEMORY STATE:\n"
+        debug_info += f"• STM Messages in Session: {memory_state['stm']['messages_in_session']}\n"
+        debug_info += f"• EpTM Messages in Session: {memory_state['episodic']['messages_in_session']}\n"
+        debug_info += f"• LTM Total Facts: {memory_state['ltm']['total_facts']}\n"
+        debug_info += f"• User Session Count: {memory_state['user_session']['session_count']}\n"
+        debug_info += f"• Is New User: {memory_state['user_session']['is_new_user']}\n\n"
+        
+        debug_info += f"📋 SYSTEM PROMPT:\n{system_prompt}\n\n"
+        
+        if context:
+            debug_info += f"🧠 CONTEXT:\n{context}\n\n"
+        else:
+            debug_info += f"🧠 CONTEXT: (empty)\n\n"
             
-            await update.message.reply_text(stats_message)
-        except Exception as e:
-            logger.error(f"Error getting memory stats: {e}")
-            await update.message.reply_text("Sorry, I couldn't retrieve memory statistics right now.")
+        debug_info += f"👤 USER MESSAGE: debug\n\n"
+        debug_info += f"🎯 FULL PROMPT:\n{full_prompt}"
+        
+        # Split into chunks if too long
+        if len(debug_info) > 4000:
+            chunks = [debug_info[i:i+4000] for i in range(0, len(debug_info), 4000)]
+            for i, chunk in enumerate(chunks):
+                await update.message.reply_text(f"Debug Info (Part {i+1}/{len(chunks)}):\n{chunk}")
+        else:
+            await update.message.reply_text(debug_info)
+            
+    except Exception as e:
+        logger.error(f"Error in debug prompt command: {e}")
+        await update.message.reply_text("Sorry, I couldn't generate debug info right now.")
 
 async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle voice messages by transcribing them and processing as text."""
@@ -133,6 +207,23 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
             logger.info(f"Context length: {len(context)} characters")
             if context:
                 logger.info(f"Context: {context[:200]}...")
+            
+            # Log the COMPLETE PROMPT that Amy sees
+            logger.info("=" * 80)
+            logger.info("🎯 COMPLETE PROMPT SENT TO AMY")
+            logger.info("=" * 80)
+            logger.info(f"SYSTEM PROMPT:")
+            logger.info(f"{system_prompt}")
+            logger.info("")
+            if context:
+                logger.info(f"CONTEXT:")
+                logger.info(f"{context}")
+                logger.info("")
+            logger.info(f"USER MESSAGE:")
+            logger.info(f"{transcribed_text}")
+            logger.info("")
+            logger.info(f"FULL PROMPT LENGTH: {len(full_prompt)} characters")
+            logger.info("=" * 80)
             
             # Generate response using Google Generative AI
             response = model.generate_content(
@@ -201,6 +292,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     logger.info(f"User ID: {user_id}, Username: {username}, Chat ID: {chat_id}")
     logger.info(f"Message: {message_text}")
     
+    # Check if this is a new user/session and record it
+    is_new_user = memory_manager.is_new_user(user_id, session_id)
+    if is_new_user:
+        logger.info(f"New user/session detected: {user_id}")
+        memory_manager.record_user_session(user_id, session_id)
+    
     # Load user-specific memory if this is a new conversation
     if not memory_manager.stm.get_context(session_id):
         logger.info(f"New conversation detected for user {user_id}, loading user-specific memory...")
@@ -222,6 +319,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Create the conversation prompt with context
     system_prompt = "You are Amy, a helpful and friendly AI assistant with memory. You can remember past conversations and learn about users over time. Respond directly to the user's message in a conversational way, using context from previous conversations when relevant."
     
+    # Add greeting context for new users
+    if is_new_user:
+        greeting = memory_manager.get_greeting(user_id, session_id)
+        system_prompt += f"\n\nNote: This appears to be a new user. If they say 'hi' or similar greetings, respond with: '{greeting}'"
+    
     # Build the full prompt with context
     if context:
         full_prompt = f"{system_prompt}\n\n{context}\n\nUser: {message_text}\nAmy:"
@@ -232,6 +334,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     logger.info("--- CONTEXT FOR AMY ---")
     logger.info(f"Context length: {len(context)} characters")
     logger.info(f"Context: {context}")
+    
+    # Log the COMPLETE PROMPT that Amy sees
+    logger.info("=" * 80)
+    logger.info("🎯 COMPLETE PROMPT SENT TO AMY")
+    logger.info("=" * 80)
+    logger.info(f"SYSTEM PROMPT:")
+    logger.info(f"{system_prompt}")
+    logger.info("")
+    if context:
+        logger.info(f"CONTEXT:")
+        logger.info(f"{context}")
+        logger.info("")
+    logger.info(f"USER MESSAGE:")
+    logger.info(f"{message_text}")
+    logger.info("")
+    logger.info(f"FULL PROMPT LENGTH: {len(full_prompt)} characters")
+    logger.info("=" * 80)
     
     # Generate response using Google Generative AI
     response = model.generate_content(
@@ -279,6 +398,7 @@ def main():
     # Add handlers
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("memory", memory_stats_command))
+    application.add_handler(CommandHandler("debug", debug_prompt_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
     

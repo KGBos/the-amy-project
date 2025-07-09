@@ -57,15 +57,104 @@ class LTM(BaseMemory):
                     json.dump([], f)
         
     def store_fact(self, fact_text: str, fact_type: str, user_id: Optional[str] = None) -> str:
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        fact_id = f"{fact_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        """
+        Store a fact in LTM with improved deduplication.
         
-        # Always use JSON fallback for now
-        return self._store_fact_json(fact_text, fact_type, timestamp, user_id)
+        Args:
+            fact_text: The fact content
+            fact_type: Type of fact (personal_info, preference, etc.)
+            user_id: Optional user ID
+            
+        Returns:
+            Fact ID
+        """
+        try:
+            # Check for duplicates before storing
+            if self._is_duplicate_fact(fact_text, fact_type, user_id):
+                logger.info(f"Duplicate fact not stored: {fact_text[:50]}... (type: {fact_type}, user: {user_id})")
+                return "duplicate"
+                
+            # Store the fact
+            timestamp = datetime.now().isoformat()
+            return self._store_fact_json(fact_text, fact_type, timestamp, user_id)
+            
+        except Exception as e:
+            logger.error(f"Error storing fact: {e}")
+            return "error"
+            
+    def _is_duplicate_fact(self, fact_text: str, fact_type: str, user_id: Optional[str] = None) -> bool:
+        """
+        Check if a fact is a duplicate using improved matching.
+        
+        Args:
+            fact_text: The fact content to check
+            fact_type: Type of fact
+            user_id: Optional user ID
+            
+        Returns:
+            True if duplicate, False otherwise
+        """
+        if not os.path.exists(self.json_file_path):
+            return False
+            
+        try:
+            with open(self.json_file_path, 'r') as f:
+                facts = json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
+            return False
+            
+        fact_text_lower = fact_text.lower().strip()
+        
+        for fact in facts:
+            existing_content = fact.get('content', '').lower().strip()
+            existing_type = fact.get('type', 'unknown')
+            existing_user_id = fact.get('user_id')
+            
+            # Skip if types don't match
+            if existing_type != fact_type:
+                continue
+                
+            # Skip if user IDs don't match (but allow null user_id for legacy)
+            if user_id and existing_user_id != user_id and existing_user_id is not None:
+                continue
+                
+            # Check for exact match
+            if existing_content == fact_text_lower:
+                return True
+                
+            # Check for similar content (for personal_info facts)
+            if fact_type == 'personal_info':
+                # Remove common words and compare
+                common_words = ['my', 'name', 'is', 'i', 'am', 'call', 'me']
+                clean_existing = ' '.join([w for w in existing_content.split() if w not in common_words])
+                clean_new = ' '.join([w for w in fact_text_lower.split() if w not in common_words])
+                
+                if clean_existing == clean_new and clean_existing:
+                    return True
+                    
+                # Check for name variations (e.g., "Leon" vs "my name is Leon")
+                if any(name in existing_content for name in ['leon', 'leon']) and any(name in fact_text_lower for name in ['leon', 'leon']):
+                    return True
+                    
+            # Check for general content similarity (for general facts)
+            if fact_type == 'general':
+                # If both facts are very similar (80%+ word overlap), consider duplicate
+                existing_words = set(existing_content.split())
+                new_words = set(fact_text_lower.split())
+                
+                if existing_words and new_words:
+                    overlap = len(existing_words.intersection(new_words))
+                    total = len(existing_words.union(new_words))
+                    similarity = overlap / total if total > 0 else 0
+                    
+                    if similarity > 0.8:  # 80% similarity threshold
+                        return True
+                        
+        return False
     
     def _store_fact_json(self, fact_text: str, fact_type: str, timestamp: str, user_id: Optional[str] = None) -> str:
         """
-        Fallback JSON storage method.
+        Fallback JSON storage method with deduplication.
         """
         fact_data = {
             'id': f"{fact_type}_{timestamp}",
@@ -110,61 +199,78 @@ class LTM(BaseMemory):
     
     def _search_facts_json(self, query: str, fact_type: Optional[str] = None, limit: int = 5, user_id: Optional[str] = None) -> List[Dict]:
         """
-        Fallback JSON search method.
+        Search facts using JSON fallback with improved relevance scoring.
+        
+        Args:
+            query: Search query
+            fact_type: Optional fact type filter
+            limit: Maximum number of facts to return
+            user_id: Optional user ID to filter facts
+            
+        Returns:
+            List of relevant facts sorted by relevance
         """
-        # This is a very basic search, in a real app you'd want more sophisticated text matching
-        # For now, it just checks if the query is in the content of the facts.
-        matching_facts = []
-        if os.path.exists(self.json_file_path):
+        if not os.path.exists(self.json_file_path):
+            return []
+            
+        try:
             with open(self.json_file_path, 'r') as f:
-                try:
-                    facts = json.load(f)
-                except json.JSONDecodeError:
-                    facts = [] # Handle empty or malformed JSON
-                logger.debug(f"[LTM JSON Search] Query: '{query}', Fact Type: {fact_type}, User ID: {user_id}") # DEBUG: Log search query
+                facts = json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
+            return []
+            
+        matching_facts = []
+        query_lower = query.lower().strip()
+        
+        # Split query into meaningful terms
+        query_terms = [term for term in query_lower.split() if len(term) > 2]
+        
+        for fact in facts:
+            fact_content = fact.get('content', '').lower()
+            fact_current_type = fact.get('type', 'unknown')
+            fact_user_id = fact.get('user_id', None)
+            
+            # Skip if fact type doesn't match
+            if fact_type and fact_current_type != fact_type:
+                continue
                 
-                # First, look for exact matches in personal_info facts (names, etc.)
-                for fact in facts:
-                    fact_content = fact.get('content', '')
-                    fact_current_type = fact.get('type', 'unknown')
-                    fact_user_id = fact.get('user_id', None)
-                    
-                    # Filter by user_id if provided
-                    if user_id and fact_user_id != user_id:
-                        continue
-                    
-                    # Prioritize personal_info facts for name searches
-                    if fact_current_type == 'personal_info':
-                        # Check for exact name matches
-                        if query.lower().strip() in fact_content.lower():
-                            matching_facts.append(fact)
-                            logger.debug(f"[LTM JSON Search] PERSONAL_INFO MATCH found: {fact['id']} (user: {fact_user_id})")
-                        # Check for standalone names
-                        elif len(query.strip()) <= 20 and query.strip().isalpha() and fact_content.strip().isalpha():
-                            if query.lower().strip() in fact_content.lower() or fact_content.lower().strip() in query.lower():
-                                matching_facts.append(fact)
-                                logger.debug(f"[LTM JSON Search] NAME MATCH found: {fact['id']} (user: {fact_user_id})")
+            # Filter by user_id if provided, but allow null user_id for legacy data
+            if user_id and fact_user_id != user_id and fact_user_id is not None:
+                continue
+            
+            # Calculate relevance score
+            relevance_score = 0
+            
+            # Exact phrase match (highest priority)
+            if query_lower in fact_content:
+                relevance_score += 100
                 
-                # Then look for general content matches
-                for fact in facts:
-                    fact_content = fact.get('content', '')
-                    fact_current_type = fact.get('type', 'unknown')
-                    fact_user_id = fact.get('user_id', None)
-                    
-                    # Filter by user_id if provided
-                    if user_id and fact_user_id != user_id:
-                        continue
-                    
-                    # Skip if we already found this fact
-                    if fact in matching_facts:
-                        continue
-                        
-                    logger.debug(f"[LTM JSON Search] Checking fact: Content='{fact_content[:50]}...', Type='{fact_current_type}', User: {fact_user_id}")
-                    if query.lower() in fact_content.lower():
-                        if fact_type is None or fact_current_type == fact_type:
-                            matching_facts.append(fact)
-                            logger.debug(f"[LTM JSON Search] MATCH found: {fact['id']} (user: {fact_user_id})") # DEBUG: Log match
-                            
+            # All query terms present (high priority)
+            if all(term in fact_content for term in query_terms):
+                relevance_score += 50
+                
+            # Partial term matches (medium priority)
+            term_matches = sum(1 for term in query_terms if term in fact_content)
+            if term_matches > 0:
+                relevance_score += (term_matches / len(query_terms)) * 30
+                
+            # Personal info facts get bonus for name-related queries
+            if fact_current_type == 'personal_info' and any(word in query_lower for word in ['name', 'who', 'leon']):
+                relevance_score += 20
+                
+            # User-specific facts get priority over legacy null user_id facts
+            if user_id and fact_user_id == user_id:
+                relevance_score += 10
+                
+            # Only include facts with meaningful relevance
+            if relevance_score >= 30:  # Minimum relevance threshold
+                fact['relevance_score'] = relevance_score
+                matching_facts.append(fact)
+                
+        # Sort by relevance score (highest first) and limit results
+        matching_facts.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
+        
+        # Limit to most relevant facts
         return matching_facts[:limit]
         
     def get_facts_by_type(self, fact_type: str) -> List[Dict]:
@@ -263,4 +369,56 @@ class LTM(BaseMemory):
             content = fact.get('content', '')
             context_parts.append(f"- {fact_type}: {content}")
             
-        return "\n".join(context_parts) 
+        return "\n".join(context_parts)
+
+    def cleanup_duplicates(self) -> int:
+        """
+        Clean up existing duplicate facts in the LTM.
+        
+        Returns:
+            Number of duplicates removed
+        """
+        if not os.path.exists(self.json_file_path):
+            return 0
+        
+        try:
+            with open(self.json_file_path, 'r') as f:
+                facts = json.load(f)
+            
+            # Group facts by content and type
+            fact_groups = {}
+            for fact in facts:
+                content = fact.get('content', '')
+                fact_type = fact.get('type', 'unknown')
+                user_id = fact.get('user_id')
+                
+                # Create key for grouping
+                key = (content.lower().strip(), fact_type, user_id)
+                
+                if key not in fact_groups:
+                    fact_groups[key] = []
+                fact_groups[key].append(fact)
+            
+            # Keep only the first fact from each group, remove duplicates
+            cleaned_facts = []
+            duplicates_removed = 0
+            
+            for key, fact_list in fact_groups.items():
+                if len(fact_list) > 1:
+                    # Keep the first fact, remove the rest
+                    cleaned_facts.append(fact_list[0])
+                    duplicates_removed += len(fact_list) - 1
+                    logger.info(f"Removed {len(fact_list) - 1} duplicate(s) for: {key[0][:50]}...")
+                else:
+                    cleaned_facts.append(fact_list[0])
+            
+            # Write back cleaned facts
+            with open(self.json_file_path, 'w') as f:
+                json.dump(cleaned_facts, f, indent=2)
+            
+            logger.info(f"Cleaned up {duplicates_removed} duplicate facts from LTM")
+            return duplicates_removed
+            
+        except Exception as e:
+            logger.error(f"Error cleaning up duplicates: {e}")
+            return 0 

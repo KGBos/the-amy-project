@@ -1,37 +1,79 @@
-# Amy's Memory System
+# Amy's Memory System (2025)
 
-Amy now has a comprehensive four-tier memory system: **Sensory Memory**, **Short-Term Memory (STM)**, **Episodic Memory (EpTM)**, and **Long-Term Memory (LTM)**. This system enables Amy to remember conversations, learn about users, and build context across all communication platforms with multimodal capabilities.
+Amy now has a real, working three-tier memory system:
+- **Short-Term Memory (STM)**
+- **Episodic Memory (EpTM)**
+- **Long-Term Memory (LTM)**
+
+This enables Amy to remember conversations, learn about users, and build context for responses across all platforms.
 
 ## 🧠 Memory Architecture
 
-### **Sensory Memory**
-- **Purpose**: Process audio/visual input and transcribe to text
-- **Technology**: Whisper for audio transcription, future video processing
-- **Integration**: Seamless flow into STM for immediate context
-- **Use Case**: Real-time audio processing and voice input handling
+```
+User Message → STM (recent context)
+           ↓
+        EpTM (session storage, summarization)
+           ↓
+        LTM (fact extraction, deduplication)
+           ↓
+    Context Builder (500 char limit)
+           ↓
+      AI Response
+```
 
-### **STM (Short-Term Memory)**
-- **Purpose**: Immediate conversation context and recent message history
-- **Storage**: In-memory buffer (20 messages per session)
-- **Use Case**: Fast access to recent conversation for context building
-- **Performance**: Sub-100ms access time
+### **Short-Term Memory (STM)**
+- **Purpose:** Immediate conversation context (in-memory buffer)
+- **Storage:** Last 3-20 messages per session
+- **Use Case:** Fast access to recent conversation for context building
 
-### **EpTM (Episodic Memory)**
-- **Purpose**: Summarized conversation chunks and semantic embeddings
-- **Storage**: SQLite database with chunk summaries and embeddings
-- **Use Case**: Middle-layer memory for conversation patterns and themes
-- **Features**: Automatic summarization and chunking
+### **Episodic Memory (EpTM)**
+- **Purpose:** Session and message storage, with summarization and search
+- **Storage:** SQLite database (per-session, per-user)
+- **Features:**
+  - Stores all messages in a session
+  - Summarizes sessions (message counts, key topics)
+  - Searchable by content and user
 
-### **LTM (Long-Term Memory)**
-- **Purpose**: Semantic knowledge storage and fact extraction via Mem0
-- **Storage**: Mem0 vector/graph database
-- **Use Case**: Learning user preferences, relationships, and goals
-- **Features**: Semantic search, memory promotion, and pruning
+### **Long-Term Memory (LTM)**
+- **Purpose:** Fact extraction and semantic knowledge storage
+- **Storage:** JSON file (with deduplication)
+- **Features:**
+  - Extracts facts from user messages
+  - Deduplicates facts before storing
+  - Builds relevant context for AI responses
 
-### **Memory Manager**
-- **Purpose**: Orchestrates all four memory systems
-- **Features**: Unified interface for processing messages and building context
-- **Advanced Features**: Memory promotion, pruning, aging, and lineage tracking
+### **MemoryManager**
+- **Purpose:** Orchestrates STM, EpTM, and LTM
+- **Features:**
+  - Unified interface for processing messages and building context
+  - Handles session creation, message routing, and context limits
+
+## 🚫 Not Implemented
+- No Mem0/Vector DB integration (LTM is JSON-based)
+- No Sensory Memory (audio/video) in core memory system
+- No proactive or multimodal features (yet)
+
+## 🛠️ How It Works
+1. **User sends a message**
+2. **STM** stores the recent message
+3. **EpTM** stores the message in the session and updates the summary
+4. **LTM** extracts and deduplicates facts from user messages
+5. **Context Builder** assembles a 500-character context for the AI
+6. **AI generates a response**
+
+## 🧪 Testing & Maintenance
+- Run `python3 tools/testing/test_episodic_memory.py` to test EpTM
+- Run `python3 tools/management/cleanup_ltm.py` to clean up LTM
+
+## 📊 Success Metrics
+- Context length always < 500 chars
+- No duplicate facts in LTM
+- Proper greeting logic
+- All memory layers working and tested
+
+---
+
+_Last updated: 2025-07-06_
 
 ## 🚀 Quick Start
 

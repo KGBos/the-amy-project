@@ -5,5 +5,6 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(leve
 logger = logging.getLogger(__name__)
 logger.info("app/__init__.py: Starting initialization")
 
-from .core.amy_agent.agent import root_agent
-logger.info("app/__init__.py: root_agent imported.")
+# Memory system imports
+from .features.memory import MemoryManager, ShortTermMemory, LongTermMemory, EpisodicMemory
+logger.info("app/__init__.py: Memory system imported.")

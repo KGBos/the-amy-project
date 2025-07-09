@@ -1,172 +1,75 @@
-# Amy: The Proactive Multimodal Digital Twin
+# Amy: Personal AI Assistant with Real Memory
 
-## 🚀 Quick Start
+## 🧠 Current Architecture (2025)
 
+Amy is a personal AI assistant with a real, working memory system. The architecture now includes:
+
+- **Short-Term Memory (STM):** In-memory buffer for recent conversation context.
+- **Episodic Memory (EpTM):** SQLite-backed session and message storage, with summarization and search.
+- **Long-Term Memory (LTM):** JSON-based fact storage with deduplication and context building.
+- **MemoryManager:** Orchestrates all three layers and provides a unified interface.
+
+```
+User Message → STM (recent context)
+           ↓
+        EpTM (session storage, summarization)
+           ↓
+        LTM (fact extraction, deduplication)
+           ↓
+    Context Builder (500 char limit)
+           ↓
+      AI Response
+```
+
+## ✅ Current Capabilities
+- Remembers recent conversation (STM)
+- Stores and summarizes sessions (EpTM)
+- Extracts and deduplicates facts (LTM)
+- Builds context for AI responses (max 500 chars)
+- Properly greets new vs. returning users
+- Tools for memory cleanup and testing
+
+## 🚫 What's NOT Implemented
+- No Mem0/Vector DB integration (LTM is JSON-based)
+- No Sensory Memory (audio/video) in core memory system
+- No proactive or multimodal features (yet)
+- No broken/legacy code or TODOs for EpTM
+
+## 🛠️ How to Use
+
+### 1. Run the Bot
 ```bash
-# Setup development environment
-./tools/scripts/setup_dev.sh
-
-# Setup agent logging (recommended)
-./tools/scripts/setup_git_hooks.sh
-
-# Run Amy (Telegram Bot)
-./runners/run_amy_bot.py
-
-# Run Amy (Web Interface)
-./runners/run_web.py
-
-# Debug Memory System
-./tools/debug/debug_memory_system.py
+python3 run_amy_bot.py
 ```
 
-## 📁 Project Structure
-
-```
-the-amy-project/
-├── 📁 app/                    # Core application
-│   ├── core/amy_agent/       # Amy's core logic
-│   ├── features/memory/      # Memory system (STM, EpTM, LTM)
-│   └── integrations/         # Platform integrations
-├── 📁 tools/                 # Development & debugging tools
-│   ├── debug/               # Memory debugging tools
-│   ├── management/          # Memory management tools
-│   └── scripts/             # Utility scripts
-├── 📁 runners/              # Application launchers
-├── 📁 docs/                 # Documentation
-├── 📁 tests/                # Test files
-├── 📁 instance/             # Data storage
-└── 📁 logs/                 # Log files
-```
-
-## 📚 Documentation
-
-- **[Main Documentation](docs/README.md)** - Complete setup and usage guide
-- **[Memory System](docs/MEMORY_SYSTEM.md)** - Detailed memory architecture
-- **[Multimodal Architecture](docs/MULTIMODAL_ARCHITECTURE.md)** - Voice, video, and multimodal capabilities
-- **[Debug Guide](docs/MEMORY_DEBUG_GUIDE.md)** - How to debug the memory system
-- **[Known Issues](docs/AMY_ISSUES.md)** - Current issues and solutions
-- **[API Integration](docs/GEMINI.md)** - Gemini API integration guide
-- **[Security](docs/SECURITY.md)** - Security guidelines
-
-## 🧠 Memory System
-
-Amy implements a sophisticated four-tier memory system:
-
-- **Sensory Memory** - Audio/visual input processing and transcription
-- **STM (Short-Term Memory)** - Immediate conversation context
-- **EpTM (Episodic Memory)** - Summarized conversation chunks and embeddings
-- **LTM (Long-Term Memory)** - Semantic knowledge and facts via Mem0
-
-## 🛠️ Development Tools
-
-### Agent Logging System
+### 2. Test the Memory System
 ```bash
-# Setup agent logging for multi-agent development
-./tools/scripts/setup_git_hooks.sh
-
-# Agent-specific commits (no manual git config switching needed!)
-python3 tools/scripts/agent_commit.py claude "Added memory system features"
-python3 tools/scripts/agent_commit.py gemini "Fixed web interface"
-python3 tools/scripts/agent_commit.py user "Manual configuration changes"
-
-# Manual agent logging
-python3 tools/scripts/agent_logger.py --action=session_start --agent=claude --model=claude-3.5-sonnet
+python3 tools/testing/test_episodic_memory.py
 ```
 
-### Debug Tools
+### 3. Clean Up Memory
 ```bash
-# Interactive memory debugging
-./tools/debug/memory_debugger.py
-
-# Real-time memory monitoring
-./tools/debug/live_memory_monitor.py
-
-# Memory flow visualization
-./tools/debug/memory_flow_visualizer.py
-
-# Complete memory demo
-./tools/debug/memory_demo.py
+python3 tools/management/cleanup_ltm.py
 ```
 
-### Management Tools
-```bash
-# Memory management
-./tools/management/manage_memory.py
+## 🗺️ Roadmap
+- **Phase 1:** Fix context, deduplication, greeting bugs (**DONE**)
+- **Phase 2:** Implement EpTM, clean up codebase (**DONE**)
+- **Phase 3:** Documentation alignment, more tests, error handling (**IN PROGRESS**)
+- **Phase 4:** Advanced features (proactive, multimodal, etc.) (**PLANNED**)
 
-# Reset memory system
-./tools/management/reset_amy_memory.py
+## 📊 Success Metrics
+- Context length always < 500 chars
+- No duplicate facts in LTM
+- Proper greeting logic
+- All memory layers working and tested
 
-# View conversation sessions
-./tools/management/view_sessions.py
-```
-
-### Utility Scripts
-```bash
-# Health check
-./tools/scripts/health_check.py
-
-# Initialize database
-./tools/scripts/init_db.py
-
-# Setup development environment
-./tools/scripts/setup_dev.sh
-```
-
-## 🧪 Testing
-
-```bash
-# Run comprehensive test suite
-python3 test_suite.py
-
-# Run specific tests
-python3 -m pytest tests/
-```
-
-## 🚀 Running Amy
-
-### Telegram Bot (Recommended)
-```bash
-./runners/run_amy_bot.py
-```
-
-### Web Interface
-```bash
-./runners/run_web.py
-```
-
-### Quick Start Scripts
-```bash
-./runners/start_telegram.sh
-./runners/start_web.sh
-```
-
-## 📊 Memory Commands
-
-- `/help` - Show available commands
-- `/memory` - Display memory statistics
-
-## 🔧 Configuration
-
-1. Copy `.env.example` to `.env`
-2. Add your API keys:
-   - `GEMINI_API_KEY` - Google AI Studio
-   - `TELEGRAM_BOT_TOKEN` - BotFather
-   - `MEM0_API_KEY` - Mem0 for LTM (coming soon)
-
-## 📈 Features
-
-- **Proactive Digital Twin** - Intelligent personal assistant with memory
-- **Four-Tier Memory** - Sensory, STM, EpTM, LTM systems
-- **Multimodal Ready** - Text, voice, and future video support
-- **Cross-Platform** - Telegram, Web, extensible
-- **Fact Extraction** - Automatic learning from conversations
-- **Context Building** - Intelligent response generation
-- **Real-Time Debugging** - Comprehensive debugging tools
-
-## 🎯 Vision
-
-Amy is not merely a conversational AI; she is your **Proactive Multimodal Digital Twin**, an intelligent entity deeply integrated into your life, anticipating needs, optimizing your time, and enhancing your capabilities across all domains. She remembers you, adapts to context, and handles tasks across text and voice using layered memory systems.
+## 📝 Contributing
+- See GOALS.md for current priorities and progress
+- See tools/testing/ for test scripts
 
 ---
 
-**For detailed documentation, see the [docs/](docs/) directory.** 
+**Amy is now a clean, working foundation for further development.**
+
+_Last updated: 2025-07-06_ 
