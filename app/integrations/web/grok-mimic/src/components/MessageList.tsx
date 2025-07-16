@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
-import Message from './Message';
+import MessageComponent from './Message';
 import { useChat } from '../context/ChatContext';
+import { Message } from '../types';
 
 const MessageList: React.FC = () => {
   const { currentChat, addMessage } = useChat();
@@ -29,7 +30,7 @@ const MessageList: React.FC = () => {
   return (
     <div className="flex-1 overflow-y-auto p-4">
       {currentChat?.messages.map(msg => (
-        <Message
+        <MessageComponent
           key={msg.id}
           message={msg}
           onReact={reaction => handleReact(msg.id, reaction)}

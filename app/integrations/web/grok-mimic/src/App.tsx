@@ -14,7 +14,8 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
-      if (window.innerWidth < 768) setSidebarOpen(false);
+      if (window.innerWidth >= 768) setSidebarOpen(true);
+      else setSidebarOpen(false);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -23,8 +24,8 @@ const AppContent: React.FC = () => {
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
   return (
-    <div className="flex h-screen" className={theme === 'dark' ? 'dark' : ''}>
-      {(!isMobile || sidebarOpen) && <Sidebar isMobile={sidebarOpen} toggleSidebar={toggleSidebarOpen} />}
+    <div className={`flex h-screen ${theme === 'dark' ? 'dark' : ''}`}>
+      {(!isMobile || sidebarOpen) && <Sidebar isMobile={sidebarOpen} toggleSidebar={toggleSidebar} />}
       <main className="flex-1 flex flex-col h-screen">
         {isMobile && (
           <button onClick={toggleSidebar} className="p-4">

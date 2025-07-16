@@ -1,4 +1,4 @@
-from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css'; // Tailwind
 import App from './App';

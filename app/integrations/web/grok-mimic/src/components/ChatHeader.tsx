@@ -35,7 +35,7 @@ const ChatHeader: React.FC = () => {
       <div className="flex gap-2">
         <Share2 className="cursor-pointer" />
         <Download onClick={exportToText} className="cursor-pointer" title="Export to Text" />
-        <Download onClick={exportToPDF} className="cursor-pointer" title="title="Export to PDF" />
+        <Download onClick={exportToPDF} className="cursor-pointer" title="Export to PDF" />
         <MoreHorizontal className="cursor-pointer" />
       </div>
     </header>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Send, Paperclip, Mic } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
+import { Message } from '../types';
 
 const InputArea: React.FC = () => {
   const { currentChat, addMessage, theme } = useChat();
@@ -43,9 +44,14 @@ const InputArea: React.FC = () => {
   };
 
   const handleVoice = () => {
-    const recognition = new (window.SpeechRecognition || (window as any).webkitSpeechRecognition)();
-    recognition.onresult = (e) => setText(e.results[0][0].transcript);
-    recognition.start();
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.onresult = (e: any) => setText(e.results[0][0].transcript);
+      recognition.start();
+    } else {
+      console.warn('SpeechRecognition not supported');
+    }
   };
 
   return (
