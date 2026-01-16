@@ -151,7 +151,7 @@ MEM0_API_KEY=your_mem0_api_key  # Coming soon
 ## 📁 File Structure
 
 ```
-app/features/memory/
+amy/features/memory/
 ├── __init__.py          # Memory system exports
 ├── sensory.py           # Sensory memory (audio/video processing)
 ├── stm.py              # Short-Term Memory

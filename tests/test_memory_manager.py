@@ -1,6 +1,7 @@
 import pytest
 import asyncio
-from app.features.memory.memory_manager import MemoryManager
+import os
+from amy.features.memory.memory_manager import MemoryManager
 from datetime import datetime
 
 @pytest.fixture

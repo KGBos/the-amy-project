@@ -36,10 +36,10 @@ Security updates are provided for the latest stable version of the application a
 
 This security policy applies to the following components and areas of The Amy Project:
 
-*   The core agent logic in `app/core/amy_agent/`
-*   The Telegram bot integration and its command handling in `app/integrations/telegram/`
+*   The core agent logic in `amy/core/amy_agent/`
+*   The Telegram bot integration and its command handling in `amy/integrations/telegram/`
 *   The web UI and its backend configuration (`run_web.py`, `start_web.sh`)
-*   Database interactions and the memory management system (`init_db.py`, `app/features/memory/`)
+*   Database interactions and the memory management system (`init_db.py`, `amy/features/memory/`)
 *   Scripts managing application state (`reset_amy_memory.py`, `manage_memory.py`)
 
 This policy **does not** cover:

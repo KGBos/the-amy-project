@@ -66,7 +66,7 @@ Input (Text/Voice/Video) → Sensory Memory → STM → EpTM → LTM
 
 ### File Structure Conventions
 ```
-app/
+amy/
 ├── core/amy_agent/          # Amy's core agent definition
 ├── features/memory/         # Memory system (Sensory, STM, EpTM, LTM)
 │   ├── sensory.py          # Sensory memory (coming soon)

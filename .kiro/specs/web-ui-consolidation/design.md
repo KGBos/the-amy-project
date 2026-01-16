@@ -9,8 +9,8 @@ This design consolidates Amy's **three** web interface implementations into a si
 ### Current State Analysis
 
 **Three Existing Implementations:**
-1. **Grok-Mimic React App** (`app/integrations/web/grok-mimic/`) - Modern React UI with TypeScript, Tailwind CSS, and sophisticated chat interface
-2. **Custom Flask Interface** (`app/integrations/web/web_interface.py`) - Simple Flask app with inline HTML template
+1. **Grok-Mimic React App** (`amy/integrations/web/grok-mimic/`) - Modern React UI with TypeScript, Tailwind CSS, and sophisticated chat interface
+2. **Custom Flask Interface** (`amy/integrations/web/web_interface.py`) - Simple Flask app with inline HTML template
 3. **ADK Web Runner** (`runners/run_web.py`) - Google ADK framework integration
 
 ### Consolidated Architecture

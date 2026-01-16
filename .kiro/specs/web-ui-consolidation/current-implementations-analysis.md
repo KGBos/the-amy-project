@@ -6,7 +6,7 @@ Amy currently has **three** separate web interface implementations that serve si
 
 ## Implementation 1: Custom Flask Web Interface
 
-**Location:** `app/integrations/web/web_interface.py`
+**Location:** `amy/integrations/web/web_interface.py`
 
 ### Architecture
 - **Framework:** Flask with inline HTML template
@@ -125,7 +125,7 @@ adk web --runner_path "runners/run_web.py:adk_runner"
 ```
 
 ### Limitations
-- **Missing Agent Implementation:** `app/core/amy_agent/agent.py` doesn't exist
+- **Missing Agent Implementation:** `amy/core/amy_agent/agent.py` doesn't exist
 - **No Direct Memory Integration:** Relies on ADK session service instead of MemoryManager
 - **Framework Dependency:** Requires ADK installation and knowledge
 - **Limited Customization:** ADK interface is not easily customizable
@@ -135,7 +135,7 @@ adk web --runner_path "runners/run_web.py:adk_runner"
 
 ## Implementation 3: Grok-Mimic React Application
 
-**Location:** `app/integrations/web/grok-mimic/`
+**Location:** `amy/integrations/web/grok-mimic/`
 
 ### Architecture
 - **Framework:** React 19 with TypeScript

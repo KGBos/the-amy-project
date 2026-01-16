@@ -228,7 +228,7 @@ MEM0_API_KEY=your_mem0_api_key_here
 ## 📁 Project Structure
 
 ```
-app/
+amy/
 ├── core/amy_agent/          # Amy's core agent definition
 ├── features/memory/         # Memory system (STM, EpTM, LTM)
 │   ├── sensory.py          # Sensory memory (audio/video processing)
