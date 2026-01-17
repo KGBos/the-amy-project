@@ -33,63 +33,54 @@ class EpisodicMemory:
         """Ensure the SQLite database exists with proper schema."""
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Create conversations table (if not exists)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                platform TEXT NOT NULL,
-                user_id TEXT,
-                username TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Create messages table (if not exists)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                conversation_id INTEGER,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (conversation_id) REFERENCES conversations (id)
-            )
-        """)
-        
-        # Create events table for ADK compatibility (if not exists)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT,
-                author TEXT,
-                content TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Create indexes for performance
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_conversations_session_id 
-            ON conversations(session_id)
-        """)
-        
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_messages_conversation_id 
-            ON messages(conversation_id)
-        """)
-        
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_messages_timestamp 
-            ON messages(timestamp)
-        """)
-        
-        conn.commit()
-        conn.close()
+        with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+            cursor = conn.cursor()
+            
+            # Enable WAL mode for better concurrency
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            
+            # Create conversations table (if not exists)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS conversations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    user_id TEXT,
+                    username TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Create messages table (if not exists)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    conversation_id INTEGER,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+                )
+            """)
+            
+            # Create indexes for performance
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_conversations_session_id 
+                ON conversations(session_id)
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_messages_conversation_id 
+                ON messages(conversation_id)
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_messages_timestamp 
+                ON messages(timestamp)
+            """)
+            
+            conn.commit()
         logger.info("Episodic Memory database schema created/verified")
     
     def add_message(self, session_id: str, role: str, content: str, timestamp: datetime) -> None:
@@ -103,48 +94,41 @@ class EpisodicMemory:
             timestamp: Message timestamp
         """
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            # Get or create conversation for this session
-            cursor.execute("""
-                SELECT id FROM conversations 
-                WHERE session_id = ?
-            """, (session_id,))
-            
-            conversation_row = cursor.fetchone()
-            if conversation_row:
-                conversation_id = conversation_row[0]
-            else:
-                # Create new conversation
+            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+                cursor = conn.cursor()
+                
+                # Get or create conversation for this session
                 cursor.execute("""
-                    INSERT INTO conversations (session_id, platform, user_id, username)
+                    SELECT id FROM conversations 
+                    WHERE session_id = ?
+                """, (session_id,))
+                
+                conversation_row = cursor.fetchone()
+                if conversation_row:
+                    conversation_id = conversation_row[0]
+                else:
+                    # Create new conversation
+                    cursor.execute("""
+                        INSERT INTO conversations (session_id, platform, user_id, username)
+                        VALUES (?, ?, ?, ?)
+                    """, (session_id, "telegram", None, None))
+                    conversation_id = cursor.lastrowid
+                
+                # Insert message
+                cursor.execute("""
+                    INSERT INTO messages (conversation_id, role, content, timestamp)
                     VALUES (?, ?, ?, ?)
-                """, (session_id, "telegram", None, None))
-                conversation_id = cursor.lastrowid
-            
-            # Insert message
-            cursor.execute("""
-                INSERT INTO messages (conversation_id, role, content, timestamp)
-                VALUES (?, ?, ?, ?)
-            """, (conversation_id, role, content, timestamp))
-            
-            # Update conversation timestamp
-            cursor.execute("""
-                UPDATE conversations 
-                SET updated_at = ?
-                WHERE id = ?
-            """, (timestamp, conversation_id))
-            
-            # Add to events table for ADK compatibility
-            cursor.execute("""
-                INSERT INTO events (session_id, author, content, timestamp)
-                VALUES (?, ?, ?, ?)
-            """, (session_id, role, json.dumps({"parts": [{"text": content}]}), timestamp))
-            
-            conn.commit()
-            conn.close()
-            
+                """, (conversation_id, role, content, timestamp))
+                
+                # Update conversation timestamp
+                cursor.execute("""
+                    UPDATE conversations 
+                    SET updated_at = ?
+                    WHERE id = ?
+                """, (timestamp, conversation_id))
+                
+                conn.commit()
+                
             logger.debug(f"Added message to EpTM and events: {session_id} - {role}")
             
         except Exception as e:
@@ -160,17 +144,16 @@ class EpisodicMemory:
             platform: Platform name
         """
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                INSERT OR REPLACE INTO conversations (session_id, platform, user_id, username)
-                VALUES (?, ?, ?, ?)
-            """, (session_id, platform, user_id, None))
-            
-            conn.commit()
-            conn.close()
-            
+            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    INSERT OR REPLACE INTO conversations (session_id, platform, user_id, username)
+                    VALUES (?, ?, ?, ?)
+                """, (session_id, platform, user_id, None))
+                
+                conn.commit()
+                
             logger.info(f"Created EpTM session: {session_id}")
             
         except Exception as e:
@@ -187,27 +170,26 @@ class EpisodicMemory:
             List of message dictionaries
         """
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                SELECT m.role, m.content, m.timestamp
-                FROM messages m
-                JOIN conversations c ON m.conversation_id = c.id
-                WHERE c.session_id = ?
-                ORDER BY m.timestamp
-            """, (session_id,))
-            
-            messages = []
-            for row in cursor.fetchall():
-                messages.append({
-                    'role': row[0],
-                    'content': row[1],
-                    'timestamp': row[2]
-                })
-            
-            conn.close()
-            return messages
+            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT m.role, m.content, m.timestamp
+                    FROM messages m
+                    JOIN conversations c ON m.conversation_id = c.id
+                    WHERE c.session_id = ?
+                    ORDER BY m.timestamp
+                """, (session_id,))
+                
+                messages = []
+                for row in cursor.fetchall():
+                    messages.append({
+                        'role': row[0],
+                        'content': row[1],
+                        'timestamp': row[2]
+                    })
+                
+                return messages
             
         except Exception as e:
             logger.error(f"Error getting session messages: {e}")
@@ -284,39 +266,38 @@ class EpisodicMemory:
             List of matching conversations
         """
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            if user_id:
-                cursor.execute("""
-                    SELECT c.session_id, c.user_id, c.platform, c.created_at
-                    FROM conversations c
-                    JOIN messages m ON c.id = m.conversation_id
-                    WHERE c.user_id = ? AND m.content LIKE ?
-                    GROUP BY c.id
-                    ORDER BY c.created_at DESC
-                """, (user_id, f"%{query}%"))
-            else:
-                cursor.execute("""
-                    SELECT c.session_id, c.user_id, c.platform, c.created_at
-                    FROM conversations c
-                    JOIN messages m ON c.id = m.conversation_id
-                    WHERE m.content LIKE ?
-                    GROUP BY c.id
-                    ORDER BY c.created_at DESC
-                """, (f"%{query}%",))
-            
-            results = []
-            for row in cursor.fetchall():
-                results.append({
-                    'session_id': row[0],
-                    'user_id': row[1],
-                    'platform': row[2],
-                    'created_at': row[3]
-                })
-            
-            conn.close()
-            return results
+            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+                cursor = conn.cursor()
+                
+                if user_id:
+                    cursor.execute("""
+                        SELECT c.session_id, c.user_id, c.platform, c.created_at
+                        FROM conversations c
+                        JOIN messages m ON c.id = m.conversation_id
+                        WHERE c.user_id = ? AND m.content LIKE ?
+                        GROUP BY c.id
+                        ORDER BY c.created_at DESC
+                    """, (user_id, f"%{query}%"))
+                else:
+                    cursor.execute("""
+                        SELECT c.session_id, c.user_id, c.platform, c.created_at
+                        FROM conversations c
+                        JOIN messages m ON c.id = m.conversation_id
+                        WHERE m.content LIKE ?
+                        GROUP BY c.id
+                        ORDER BY c.created_at DESC
+                    """, (f"%{query}%",))
+                
+                results = []
+                for row in cursor.fetchall():
+                    results.append({
+                        'session_id': row[0],
+                        'user_id': row[1],
+                        'platform': row[2],
+                        'created_at': row[3]
+                    })
+                
+                return results
             
         except Exception as e:
             logger.error(f"Error searching conversations: {e}")
@@ -330,27 +311,26 @@ class EpisodicMemory:
             List of session information
         """
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                SELECT session_id, user_id, platform, created_at, updated_at
-                FROM conversations
-                ORDER BY created_at DESC
-            """)
-            
-            sessions = []
-            for row in cursor.fetchall():
-                sessions.append({
-                    'session_id': row[0],
-                    'user_id': row[1],
-                    'platform': row[2],
-                    'created_at': row[3],
-                    'updated_at': row[4]
-                })
-            
-            conn.close()
-            return sessions
+            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT session_id, user_id, platform, created_at, updated_at
+                    FROM conversations
+                    ORDER BY created_at DESC
+                """)
+                
+                sessions = []
+                for row in cursor.fetchall():
+                    sessions.append({
+                        'session_id': row[0],
+                        'user_id': row[1],
+                        'platform': row[2],
+                        'created_at': row[3],
+                        'updated_at': row[4]
+                    })
+                
+                return sessions
             
         except Exception as e:
             logger.error(f"Error getting all sessions: {e}")
@@ -364,32 +344,30 @@ class EpisodicMemory:
             Dictionary with EpTM statistics
         """
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            # Get total sessions
-            cursor.execute("SELECT COUNT(*) FROM conversations")
-            total_sessions = cursor.fetchone()[0]
-            
-            # Get total messages
-            cursor.execute("SELECT COUNT(*) FROM messages")
-            total_messages = cursor.fetchone()[0]
-            
-            # Get sessions by platform
-            cursor.execute("""
-                SELECT platform, COUNT(*) 
-                FROM conversations 
-                GROUP BY platform
-            """)
-            platforms = dict(cursor.fetchall())
-            
-            conn.close()
-            
-            return {
-                'total_sessions': total_sessions,
-                'total_messages': total_messages,
-                'platforms': platforms
-            }
+            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
+                cursor = conn.cursor()
+                
+                # Get total sessions
+                cursor.execute("SELECT COUNT(*) FROM conversations")
+                total_sessions = cursor.fetchone()[0]
+                
+                # Get total messages
+                cursor.execute("SELECT COUNT(*) FROM messages")
+                total_messages = cursor.fetchone()[0]
+                
+                # Get sessions by platform
+                cursor.execute("""
+                    SELECT platform, COUNT(*) 
+                    FROM conversations 
+                    GROUP BY platform
+                """)
+                platforms = dict(cursor.fetchall())
+                
+                return {
+                    'total_sessions': total_sessions,
+                    'total_messages': total_messages,
+                    'platforms': platforms
+                }
             
         except Exception as e:
             logger.error(f"Error getting EpTM stats: {e}")

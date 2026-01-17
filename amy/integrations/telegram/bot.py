@@ -1,12 +1,21 @@
 import os
 import time
 import logging
+import traceback
 from datetime import datetime
 from dotenv import load_dotenv
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import google.generativeai as genai
+
+# Import configuration
+from amy.config import (
+    GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, DEFAULT_MODEL,
+    DEFAULT_TEMPERATURE, DEFAULT_TOP_P, DEFAULT_TOP_K, DEFAULT_MAX_OUTPUT_TOKENS,
+    TELEGRAM_LOG_FILE
+)
+from amy.core.prompts import AmyPromptBuilder
 
 # Import the memory system
 from amy.features.memory import MemoryManager
@@ -16,28 +25,26 @@ from amy.features.sensory.audio_transcription import AudioTranscriber
 load_dotenv()
 
 # Configure Gemini/Google Generative AI
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable is required")
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Initialize the model
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel(DEFAULT_MODEL)
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('instance/amy_telegram_bot.log'),
+        logging.FileHandler(TELEGRAM_LOG_FILE),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
 
 # Initialize bot
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-if not TELEGRAM_TOKEN:
+if not TELEGRAM_BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
 
 # Initialize memory manager
@@ -64,6 +71,26 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 🛑 Press Ctrl+C to stop the bot
 """
     await update.message.reply_text(help_text)
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log errors and notify user about issues."""
+    logger.error("Exception while handling an update:", exc_info=context.error)
+    
+    # Format traceback for logging
+    tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
+    tb_string = "".join(tb_list)
+    logger.error(f"Traceback:\n{tb_string}")
+    
+    # Notify user if possible
+    if update and hasattr(update, 'effective_message') and update.effective_message:
+        try:
+            await update.effective_message.reply_text(
+                "Sorry, an error occurred while processing your request. Please try again."
+            )
+        except Exception:
+            # If we can't notify the user, just log it
+            logger.error("Failed to notify user about the error")
 
 async def memory_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show memory statistics."""
@@ -99,21 +126,21 @@ async def debug_prompt_command(update: Update, context: ContextTypes.DEFAULT_TYP
         memory_state = memory_manager.get_detailed_memory_state(session_id, user_id)
         
         # Get current context
-        context = memory_manager.get_context_for_query(session_id, "debug", user_id)
+        mem_context = memory_manager.get_context_for_query(session_id, "debug", user_id)
         
         # Build the system prompt
-        system_prompt = "You are Amy, a helpful and friendly AI assistant with memory. You can remember past conversations and learn about users over time. Respond directly to the user's message in a conversational way, using context from previous conversations when relevant."
+        system_prompt = AmyPromptBuilder.get_system_prompt()
         
         # Build the full prompt
-        if context:
-            full_prompt = f"{system_prompt}\n\n{context}\n\nUser: debug\nAmy:"
-        else:
-            full_prompt = f"{system_prompt}\n\nUser: debug\nAmy:"
+        full_prompt = AmyPromptBuilder.build_full_prompt(
+            user_message="debug",
+            context=mem_context
+        )
         
         # Format the debug info
         debug_info = f"🔍 PROMPT DEBUG INFO:\n\n"
         debug_info += f"📊 System Prompt Length: {len(system_prompt)} chars\n"
-        debug_info += f"🧠 Context Length: {len(context)} chars\n"
+        debug_info += f"🧠 Context Length: {len(mem_context)} chars\n"
         debug_info += f"📝 Total Prompt Length: {len(full_prompt)} chars\n\n"
         
         # Add memory state
@@ -126,8 +153,8 @@ async def debug_prompt_command(update: Update, context: ContextTypes.DEFAULT_TYP
         
         debug_info += f"📋 SYSTEM PROMPT:\n{system_prompt}\n\n"
         
-        if context:
-            debug_info += f"🧠 CONTEXT:\n{context}\n\n"
+        if mem_context:
+            debug_info += f"🧠 CONTEXT:\n{mem_context}\n\n"
         else:
             debug_info += f"🧠 CONTEXT: (empty)\n\n"
             
@@ -191,33 +218,30 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
             )
             
             # Build context for Amy's response
-            context = memory_manager.get_context_for_query(session_id, transcribed_text)
+            mem_context = memory_manager.get_context_for_query(session_id, transcribed_text)
             
-            # Create the conversation prompt with context
-            system_prompt = "You are Amy, a helpful and friendly AI assistant with memory. You can remember past conversations and learn about users over time. Respond directly to the user's message in a conversational way, using context from previous conversations when relevant."
-            
-            # Build the full prompt with context
-            if context:
-                full_prompt = f"{system_prompt}\n\n{context}\n\nUser: {transcribed_text}\nAmy:"
-            else:
-                full_prompt = f"{system_prompt}\n\nUser: {transcribed_text}\nAmy:"
+            # Build the full prompt with context using AmyPromptBuilder
+            full_prompt = AmyPromptBuilder.build_full_prompt(
+                user_message=transcribed_text,
+                context=mem_context
+            )
             
             # Log the context being used
             logger.info(f"--- CONTEXT FOR AMY ---")
-            logger.info(f"Context length: {len(context)} characters")
-            if context:
-                logger.info(f"Context: {context[:200]}...")
+            logger.info(f"Context length: {len(mem_context)} characters")
+            if mem_context:
+                logger.info(f"Context: {mem_context[:200]}...")
             
             # Log the COMPLETE PROMPT that Amy sees
             logger.info("=" * 80)
             logger.info("🎯 COMPLETE PROMPT SENT TO AMY")
             logger.info("=" * 80)
             logger.info(f"SYSTEM PROMPT:")
-            logger.info(f"{system_prompt}")
+            logger.info(f"{AmyPromptBuilder.get_system_prompt()}")
             logger.info("")
-            if context:
+            if mem_context:
                 logger.info(f"CONTEXT:")
-                logger.info(f"{context}")
+                logger.info(f"{mem_context}")
                 logger.info("")
             logger.info(f"USER MESSAGE:")
             logger.info(f"{transcribed_text}")
@@ -226,23 +250,27 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
             logger.info("=" * 80)
             
             # Generate response using Google Generative AI
-            response = model.generate_content(
-                full_prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.7,
-                    top_p=0.8,
-                    top_k=40,
-                    max_output_tokens=1024,
+            try:
+                response = model.generate_content(
+                    full_prompt,
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.7,
+                        top_p=0.8,
+                        top_k=40,
+                        max_output_tokens=1024,
+                    )
                 )
-            )
-            
-            # Check if response was blocked by safety filters
-            if response.candidates and response.candidates[0].finish_reason == 2:
-                amy_response = "I apologize, but I'm unable to respond to that message due to content safety filters. Could you please rephrase your message?"
-            elif response.text:
-                amy_response = response.text
-            else:
-                amy_response = "I'm sorry, I encountered an issue generating a response. Please try again."
+                
+                # Check if response was blocked by safety filters
+                if response.candidates and response.candidates[0].finish_reason == 2:
+                    amy_response = "I apologize, but I'm unable to respond to that message due to content safety filters. Could you please rephrase your message?"
+                elif response.text:
+                    amy_response = response.text
+                else:
+                    amy_response = "I'm sorry, I encountered an issue generating a response. Please try again."
+            except Exception as e:
+                logger.error(f"Gemini API error: {e}")
+                amy_response = "I'm having trouble connecting to my thinking system. Please try again in a moment."
             
             # Process Amy's response through memory system
             memory_manager.process_message(
@@ -314,37 +342,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     )
     
     # Build context for the response
-    context = memory_manager.get_context_for_query(session_id, message_text, user_id)
+    mem_context = memory_manager.get_context_for_query(session_id, message_text, user_id)
     
-    # Create the conversation prompt with context
-    system_prompt = "You are Amy, a helpful and friendly AI assistant with memory. You can remember past conversations and learn about users over time. Respond directly to the user's message in a conversational way, using context from previous conversations when relevant."
-    
-    # Add greeting context for new users
+    # Build greeting context for new users
+    greeting_context = ""
     if is_new_user:
         greeting = memory_manager.get_greeting(user_id, session_id)
-        system_prompt += f"\n\nNote: This appears to be a new user. If they say 'hi' or similar greetings, respond with: '{greeting}'"
+        greeting_context = AmyPromptBuilder.build_greeting_context(greeting)
     
-    # Build the full prompt with context
-    if context:
-        full_prompt = f"{system_prompt}\n\n{context}\n\nUser: {message_text}\nAmy:"
-    else:
-        full_prompt = f"{system_prompt}\n\nUser: {message_text}\nAmy:"
+    # Build the full prompt with context using AmyPromptBuilder
+    full_prompt = AmyPromptBuilder.build_full_prompt(
+        user_message=message_text,
+        context=mem_context,
+        greeting_context=greeting_context
+    )
     
     # Log the context being sent to Amy
     logger.info("--- CONTEXT FOR AMY ---")
-    logger.info(f"Context length: {len(context)} characters")
-    logger.info(f"Context: {context}")
+    logger.info(f"Context length: {len(mem_context)} characters")
+    logger.info(f"Context: {mem_context}")
     
     # Log the COMPLETE PROMPT that Amy sees
     logger.info("=" * 80)
     logger.info("🎯 COMPLETE PROMPT SENT TO AMY")
     logger.info("=" * 80)
     logger.info(f"SYSTEM PROMPT:")
-    logger.info(f"{system_prompt}")
+    logger.info(f"{AmyPromptBuilder.get_system_prompt()}")
     logger.info("")
-    if context:
+    if mem_context:
         logger.info(f"CONTEXT:")
-        logger.info(f"{context}")
+        logger.info(f"{mem_context}")
         logger.info("")
     logger.info(f"USER MESSAGE:")
     logger.info(f"{message_text}")
@@ -353,23 +380,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     logger.info("=" * 80)
     
     # Generate response using Google Generative AI
-    response = model.generate_content(
-        full_prompt,
-        generation_config=genai.GenerationConfig(
-            temperature=0.7,
-            top_p=0.8,
-            top_k=40,
-            max_output_tokens=1024,
+    try:
+        response = model.generate_content(
+            full_prompt,
+            generation_config=genai.GenerationConfig(
+                temperature=0.7,
+                top_p=0.8,
+                top_k=40,
+                max_output_tokens=1024,
+            )
         )
-    )
-    
-    # Check if response was blocked by safety filters
-    if response.candidates and response.candidates[0].finish_reason == 2:
-        amy_response = "I apologize, but I'm unable to respond to that message due to content safety filters. Could you please rephrase your message?"
-    elif response.text:
-        amy_response = response.text
-    else:
-        amy_response = "I'm sorry, I encountered an issue generating a response. Please try again."
+        
+        # Check if response was blocked by safety filters
+        if response.candidates and response.candidates[0].finish_reason == 2:
+            amy_response = "I apologize, but I'm unable to respond to that message due to content safety filters. Could you please rephrase your message?"
+        elif response.text:
+            amy_response = response.text
+        else:
+            amy_response = "I'm sorry, I encountered an issue generating a response. Please try again."
+    except Exception as e:
+        logger.error(f"Gemini API error: {e}")
+        amy_response = "I'm having trouble connecting to my thinking system. Please try again in a moment."
     
     # Process Amy's response through memory systems
     memory_manager.process_message(
@@ -393,7 +424,7 @@ def main():
     logger.info("Starting Amy Telegram Bot with Memory System...")
     
     # Create the Application
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
     # Add handlers
     application.add_handler(CommandHandler("help", help_command))
@@ -401,6 +432,9 @@ def main():
     application.add_handler(CommandHandler("debug", debug_prompt_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
+    
+    # Add global error handler
+    application.add_error_handler(error_handler)
     
     # Start polling
     logger.info("Starting polling...")

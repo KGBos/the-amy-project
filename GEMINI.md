@@ -13,7 +13,6 @@ This file stores key configuration details and conventions for the "The Amy Proj
     *   **`run_amy_bot.py`**: Runner for the Telegram bot.
     *   **`debug/`**: Debugging tools and utilities.
     *   **`management/`**: Project management scripts.
-    *   **`amy_memory.db`**: The primary SQLite database for conversation history.
 *   **`venv/`**: Python virtual environment.
 *   **`.env`**: Stores environment variables (API keys, tokens).
 *   **`requirements.txt`**: Lists all Python dependencies.

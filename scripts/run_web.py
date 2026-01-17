@@ -16,8 +16,6 @@ load_dotenv()
 
 # Construct the absolute path to the database
 db_path = os.path.join(project_root, "instance", "amy_memory.db")
-db_url = f"sqlite:///{db_path}"
-
 # Initialize the session service with the correct database
 session_service = DatabaseSessionService(db_url=db_url)
 

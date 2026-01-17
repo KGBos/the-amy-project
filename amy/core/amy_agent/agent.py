@@ -12,6 +12,8 @@ from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event
 from google.genai.types import Content, Part
 
+from amy.config import GEMINI_API_KEY, DEFAULT_MODEL
+from amy.core.prompts import AmyPromptBuilder
 from amy.features.memory import MemoryManager
 from amy.core.agent_logger import setup_agent_logger
 
@@ -29,12 +31,11 @@ class AmyAgent(BaseAgent):
         self.memory_manager = memory_manager or MemoryManager()
         
         # Initialize the Gemini model
-        api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
-        if not api_key:
+        if not GEMINI_API_KEY:
             logger.warning("No API KEY found for Gemini. Agent may fail to generate responses.")
         
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-flash-latest')
+        genai.configure(api_key=GEMINI_API_KEY)
+        self.model = genai.GenerativeModel(DEFAULT_MODEL)
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """
@@ -58,7 +59,7 @@ class AmyAgent(BaseAgent):
         user_text = "".join([part.text for part in message.parts if part.text])
         
         if not user_text:
-            yield Content(parts=[Part(text="I'm sorry, I didn't receive any text.")])
+            yield Event(author=self.name, content=Content(parts=[Part(text="I'm sorry, I didn't receive any text.")]))
             return
 
         try:
@@ -74,20 +75,21 @@ class AmyAgent(BaseAgent):
             # Get context for the query
             mem_context = self.memory_manager.get_context_for_query(session_id, user_text, user_id)
             
-            # System prompt
-            system_prompt = (
-                "You are Amy, a helpful and friendly AI assistant with memory. "
-                "You can remember past conversations and learn about users over time. "
-                "Respond directly to the user's message in a conversational way, "
-                "using context from previous conversations when relevant."
+            # Build the full prompt using AmyPromptBuilder
+            full_prompt = AmyPromptBuilder.build_full_prompt(
+                user_message=user_text,
+                context=mem_context
             )
             
-            # Build the full prompt (simplification for ADK runner)
-            # Todo: Use properly structured history from memory manager if available
-            full_prompt = f"{system_prompt}\n\n{mem_context}\n\nUser: {user_text}\nAmy:"
-            
             response = self.model.generate_content(full_prompt)
-            amy_response = response.text if response.text else "I'm sorry, I couldn't generate a response."
+            
+            # Safer response text access with error handling
+            try:
+                amy_response = response.text or "I'm sorry, I couldn't generate a response."
+            except ValueError:
+                # Gemini raises ValueError if response was blocked by safety filters
+                amy_response = "I'm sorry, I couldn't generate a response due to content safety filters."
+                logger.warning("Response blocked by safety filters")
             
             # Record Amy's response
             self.memory_manager.process_message(
