@@ -5,8 +5,9 @@ Single source of truth for all conversation persistence
 
 import sqlite3
 import logging
-from datetime import datetime
-from typing import List, Dict, Optional
+import threading
+from contextlib import contextmanager
+from typing import List, Dict, Optional, Generator
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -16,15 +17,42 @@ class ConversationDB:
     """
     Persistent conversation storage using SQLite.
     
-    Replaces the complex STM/EpTM/SessionManager mess with a single,
-    clean database layer.
+    Thread-safe implementation with connection pooling to prevent
+    database lock errors and connection leaks.
     """
     
     def __init__(self, db_path: str = "instance/amy.db"):
         """Initialize with database path."""
         self.db_path = db_path
+        self._lock = threading.Lock()
+        self._conn: Optional[sqlite3.Connection] = None
         self._ensure_db_exists()
         logger.info(f"ConversationDB initialized: {db_path}")
+    
+    @contextmanager
+    def _get_connection(self) -> Generator[sqlite3.Connection, None, None]:
+        """
+        Get a thread-safe database connection.
+        
+        Uses a persistent connection with locking to prevent
+        concurrent access issues.
+        """
+        with self._lock:
+            if self._conn is None:
+                self._conn = sqlite3.connect(
+                    self.db_path, 
+                    check_same_thread=False,
+                    timeout=30.0
+                )
+            yield self._conn
+    
+    def close(self) -> None:
+        """Close the database connection."""
+        with self._lock:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
+                logger.debug("Database connection closed")
     
     def _ensure_db_exists(self):
         """Create database and tables if they don't exist."""
@@ -82,7 +110,7 @@ class ConversationDB:
         Returns:
             The message ID
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO messages (session_id, user_id, role, content, platform)
@@ -109,7 +137,7 @@ class ConversationDB:
         Returns:
             List of message dicts, oldest first
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             
@@ -129,7 +157,7 @@ class ConversationDB:
     
     def get_message_count(self, session_id: str) -> int:
         """Get total message count for a session."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT COUNT(*) FROM messages WHERE session_id = ?
@@ -138,7 +166,7 @@ class ConversationDB:
     
     def get_user_sessions(self, user_id: str) -> List[str]:
         """Get all session IDs for a user."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT DISTINCT session_id FROM messages 
@@ -149,7 +177,7 @@ class ConversationDB:
     
     def has_previous_conversations(self, user_id: str) -> bool:
         """Check if user has any previous conversations."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT 1 FROM messages WHERE user_id = ? LIMIT 1

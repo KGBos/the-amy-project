@@ -58,6 +58,28 @@ LOG_DIRECTORY = "agent_logs"
 TELEGRAM_LOG_FILE = "instance/amy_telegram_bot.log"
 
 # =============================================================================
+# Input Validation
+# =============================================================================
+
+# Maximum message length (characters)
+MAX_MESSAGE_LENGTH = 4000
+
+# Session history limit for context
+MAX_SESSION_HISTORY = 50
+
+# LTM search result limit
+LTM_SEARCH_LIMIT = 5
+
+# Planner tags to strip from responses
+PLANNER_TAGS = [
+    '/*PLANNING*/', 
+    '/*REASONING*/', 
+    '/*ACTION*/', 
+    '/*FINAL_ANSWER*/', 
+    '/*REPLANNING*/'
+]
+
+# =============================================================================
 # System Prompts
 # =============================================================================
 

@@ -1,13 +1,20 @@
 
 import logging
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from typing import Optional, Dict, Any, List
 from google.adk.sessions.base_session_service import BaseSessionService
 from google.adk.sessions.session import Session, Event
 from google.genai.types import Content, Part
 from amy.memory.conversation import ConversationDB
+from amy.config import MAX_SESSION_HISTORY
 
 logger = logging.getLogger(__name__)
+
+# Thread pool for non-blocking DB operations
+_db_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="db_worker")
+
 
 class SqliteSessionService(BaseSessionService):
     """
@@ -15,12 +22,19 @@ class SqliteSessionService(BaseSessionService):
     
     This allows the ADK Runner to automatically manage conversation history
     persistence, replacing manual management in the application layer.
+    
+    Uses run_in_executor for non-blocking database operations.
     """
     
     def __init__(self, db: ConversationDB):
         self.db = db
         # Cache for active session objects to maintain state in memory during run
         self._cache: Dict[str, Session] = {}
+    
+    async def _run_sync(self, func, *args):
+        """Run a synchronous function in the executor."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(_db_executor, partial(func, *args))
         
     async def get_session(
         self,
@@ -31,25 +45,22 @@ class SqliteSessionService(BaseSessionService):
         """
         Retrieve a session from the database.
         """
-        # Check cache first (optional, but good for performance within a run)
+        # Check cache first (good for performance within a run)
         cache_key = f"{app_name}:{session_id}"
         if cache_key in self._cache:
              return self._cache[cache_key]
 
-        # Check existence
-        if not self.db.get_message_count(session_id):
+        # Check existence (async)
+        message_count = await self._run_sync(self.db.get_message_count, session_id)
+        if not message_count:
             return None
 
-        # Load history
-        # Note: ConversationDB stores messages (User/Model). 
-        # ADK Sessions are lists of Events (which contain Content).
-        # We need to map DB Messages -> ADK Events -> Session.history (which is List[Event])
-        
-        # NOTE: Standard ADK logic reconstructs Session from stored Events.
-        # Our DB stores "messages", which are a simplified view.
-        # We will map them back to simplified Events for compatibility.
-        
-        messages = self.db.get_recent_messages(session_id, limit=50) # Load reasonable context
+        # Load history (async)
+        messages = await self._run_sync(
+            self.db.get_recent_messages, 
+            session_id, 
+            MAX_SESSION_HISTORY
+        )
         
         events = []
         for msg in messages:
@@ -61,12 +72,10 @@ class SqliteSessionService(BaseSessionService):
             content = Content(role=adk_role, parts=[Part(text=text)])
             
             # Construct Event (simplified)
-            # We don't have exact timestamps or event types in simple DB, 
-            # so we infer a basic "turn" event.
             event = Event(
-                id=str(msg.get('id', '')), # Use DB ID if available
-                author=adk_role, # Map role to author
-                timestamp=0.0, # Unknown
+                id=str(msg.get('id', '')),
+                author=adk_role,
+                timestamp=0.0,
                 content=content
             )
             events.append(event)
@@ -76,7 +85,7 @@ class SqliteSessionService(BaseSessionService):
             app_name=app_name,
             user_id=user_id,
             events=events,
-            state={'platform': 'unknown'} # State can hold other metadata
+            state={'platform': 'unknown'}
         )
         
         self._cache[cache_key] = session
@@ -94,7 +103,7 @@ class SqliteSessionService(BaseSessionService):
             id=session_id,
             app_name=app_name,
             user_id=user_id,
-            events=[], # Empty start
+            events=[],
             state=state or {}
         )
         
@@ -111,15 +120,11 @@ class SqliteSessionService(BaseSessionService):
         session.events.append(event)
         
         # We only care about persisting "Content" events (User/Model messages)
-        # to our simple SQLite DB.
-        # We might ignore ToolCalls for now if DB schema doesn't support them,
-        # or just persist the final text response.
-        
         if not event.content:
             return
 
         # Extract role/text
-        role = event.content.role # 'user' or 'model'
+        role = event.content.role
         
         # Combine parts into single text for simple DB
         text_parts = [p.text for p in event.content.parts if p.text]
@@ -134,8 +139,9 @@ class SqliteSessionService(BaseSessionService):
         # Map ADK role to DB role
         db_role = 'user' if role == 'user' else 'assistant'
 
-        # Persist
-        self.db.add_message(
+        # Persist (async)
+        await self._run_sync(
+            self.db.add_message,
             session.id,
             db_role,
             text_content,
@@ -148,3 +154,4 @@ class SqliteSessionService(BaseSessionService):
 
     async def delete_session(self, app_name: str, session_id: str) -> None:
         pass
+
