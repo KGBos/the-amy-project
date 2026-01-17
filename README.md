@@ -1,79 +1,67 @@
-# Amy: Personal AI Assistant with Real Memory
+# Amy: Personal AI Assistant with Memory
 
-## 🧠 Current Architecture (2025)
+## 🧠 Architecture (2026)
 
-Amy is a personal AI assistant with a real, working memory system. The architecture now includes:
+Amy is a personal AI assistant with a clean, persistent memory system:
 
-- **Short-Term Memory (STM):** In-memory buffer for recent conversation context.
-- **Episodic Memory (EpTM):** SQLite-backed session and message storage, with summarization and search.
-- **Long-Term Memory (LTM):** Vector-based semantic storage using **mem0** with ChromaDB and HuggingFace embeddings.
-- **MemoryManager:** Orchestrates all three layers and provides a unified interface.
+- **ConversationDB:** SQLite-backed conversation storage
+- **Long-Term Memory (LTM):** Vector-based semantic storage using **mem0** with ChromaDB
+- **Memory Tools:** ADK-style explicit save/search tools
 
 ```
-User Message → STM (recent context)
-           ↓
-        EpTM (session storage, summarization)
-           ↓
-        LTM (fact extraction, deduplication)
-           ↓
-    Context Builder (500 char limit)
-           ↓
-      AI Response
+User Message → ConversationDB (persistent storage)
+                    ↓
+              Recent Context (last 10 messages)
+                    ↓
+              LTM (semantic fact search)
+                    ↓
+              Gemini AI → Response
+                    ↓
+              ConversationDB (store response)
 ```
 
-## ✅ Current Capabilities
-- Remembers recent conversation (STM)
-- Stores and summarizes sessions (EpTM)
-- Extracts and deduplicates facts (LTM)
-- Builds context for AI responses (max 500 chars)
-- Properly greets new vs. returning users
-- Tools for memory cleanup and testing
-
-## 🚫 What's NOT Implemented
-- No Sensory Memory (audio/video) in core memory system
-- No proactive or multimodal features (yet)
-- No reminder/notification system
+## ✅ Features
+- Persistent conversation storage (SQLite)
+- Semantic memory search (ChromaDB + HuggingFace)
+- Automatic fact extraction (name, preferences)
+- Memory tools for explicit save/recall
+- Telegram and Web interfaces
 
 ## 🛠️ How to Use
 
-### 1. Run the Bot
+### Run the Bot
 ```bash
-python3 run_amy_bot.py
+./start_telegram.sh
+# or: python scripts/run_amy_bot.py
 ```
 
-### 2. Test the Memory System
+### Run Web Interface
 ```bash
-python3 tools/testing/test_episodic_memory.py
+./start_web.sh
+# or: python scripts/run_web.py
 ```
 
-### 3. Clean Up Memory
-```bash
-python3 tools/management/cleanup_ltm.py
+## 📁 Key Files
+
 ```
-
-## 🗺️ Roadmap
-- **Phase 1:** Fix context, deduplication, greeting bugs (**DONE**)
-- **Phase 2:** Implement EpTM, clean up codebase (**DONE**)
-- **Phase 3:** Documentation alignment, more tests, error handling (**IN PROGRESS**)
-- **Phase 4:** Advanced features (proactive, multimodal, etc.) (**PLANNED**)
-
-## 📊 Success Metrics
-- Context length always < 500 chars
-- No duplicate facts in LTM
-- Proper greeting logic
-- All memory layers working and tested
+amy/
+├── features/memory/
+│   ├── conversation_db.py   # SQLite conversation storage
+│   └── ltm.py               # Long-term memory (mem0)
+├── tools/
+│   └── memory_tools.py      # ADK memory tools
+├── integrations/
+│   └── telegram/bot.py      # Telegram bot
+└── config.py                # Configuration
+```
 
 ## 📚 Documentation
 
-- [Architecture](docs/ARCHITECTURE.md) - System design and components
-- [Goals & Roadmap](docs/GOALS.md) - Current priorities and future plans
-- [Memory System](docs/MEMORY_SYSTEM.md) - Detailed memory documentation
+- [Architecture](docs/ARCHITECTURE.md) - System design
+- [Memory System](docs/MEMORY_SYSTEM.md) - Memory documentation
+- [Goals & Roadmap](docs/GOALS.md) - Priorities
 - [Changelog](docs/CHANGELOG.md) - Version history
-
-## 📝 Contributing
-- See [GOALS.md](docs/GOALS.md) for current priorities
-- See `scripts/testing/` for test scripts
 
 ---
 
-_Last updated: 2026-01-17_ 
+_Last updated: 2026-01-17_

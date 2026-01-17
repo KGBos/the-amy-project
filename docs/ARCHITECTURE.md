@@ -1,47 +1,39 @@
 # Amy Architecture
 
-> Detailed technical documentation for the Amy Project.
+> Technical documentation for the Amy Project.
 
 ## 🎯 Overview
 
-Amy is a **Proactive Multimodal Digital Twin** - an intelligent assistant with persistent memory across conversations. Built on Google ADK with a three-tier memory system.
+Amy is a personal AI assistant with persistent memory. Built with a clean, simple architecture focused on conversation storage and semantic recall.
 
 ---
 
 ## 🏗️ Architecture
 
-### Three-Tier Memory System
-
 ```
 User Message → [Telegram / Web Interface]
                         ↓
-              Short-Term Memory (STM)
-              - In-memory buffer
-              - Last 3-20 messages per session
-                        ↓
-              Episodic Memory (EpTM)
-              - SQLite database
-              - Session storage & summarization
+              ConversationDB (SQLite)
+              - Persistent message storage
+              - Last N messages for context
                         ↓
               Long-Term Memory (LTM)
               - mem0 with ChromaDB
-              - HuggingFace embeddings
-              - Semantic vector search
-                        ↓
-              Context Builder (500 char limit)
+              - Semantic fact search
                         ↓
               Gemini AI Response
+                        ↓
+              ConversationDB (store response)
 ```
 
 ### Core Components
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| **STM** | In-memory | Recent conversation context (~20 turns) |
-| **EpTM** | SQLite | Session storage, conversation summaries |
+| **ConversationDB** | SQLite | All conversation storage |
 | **LTM** | mem0 + ChromaDB | Semantic fact storage & retrieval |
-| **Memory Manager** | Python | Orchestrates all memory tiers |
-| **Agent Core** | Google ADK | Response generation |
+| **Memory Tools** | ADK FunctionTool | Explicit save/search for agent |
+| **Agent** | Google ADK / Gemini | Response generation |
 
 ---
 
@@ -50,69 +42,47 @@ User Message → [Telegram / Web Interface]
 ```
 amy/
 ├── core/
-│   ├── amy_agent/
-│   │   └── agent.py          # Main AmyAgent (BaseAgent)
-│   ├── prompts.py            # Prompt building
-│   └── agent_logger.py       # Logging utilities
+│   └── amy_agent/
+│       └── agent.py          # ADK Agent with memory tools
 ├── features/
 │   └── memory/
-│       ├── stm.py            # Short-Term Memory
-│       ├── episodic.py       # Episodic Memory (SQLite)
+│       ├── conversation_db.py # SQLite conversation storage
 │       ├── ltm.py            # Long-Term Memory (mem0)
-│       ├── memory_manager.py # Memory orchestration
-│       ├── context_builder.py# Context assembly
-│       └── session_manager.py# User session tracking
+│       └── episodic.py       # Legacy (kept for compat)
+├── tools/
+│   └── memory_tools.py       # ADK save/search tools
 ├── integrations/
 │   ├── telegram/bot.py       # Telegram bot
-│   ├── web/                  # Web interface
-│   └── calendar/             # Calendar integration
-└── config.py                 # Centralized configuration
+│   └── web/                  # Web interface
+└── config.py                 # Configuration
 
 scripts/
-├── run_amy_bot.py            # Telegram bot launcher
-├── run_web.py                # Web UI launcher
-├── management/               # Memory management tools
-├── debug/                    # Debug utilities
-└── testing/                  # Test scripts
-
-docs/
-├── ARCHITECTURE.md           # This file
-├── GOALS.md                  # Roadmap & priorities
-├── MEMORY_SYSTEM.md          # Memory system deep-dive
-├── MEMORY_DEBUG_GUIDE.md     # Debugging memory issues
-└── SECURITY.md               # Security considerations
+├── run_amy_bot.py            # Telegram launcher
+├── run_web.py                # Web launcher
+└── management/               # DB tools
 ```
 
 ---
 
-## 🧠 Memory System Details
+## 🧠 Memory System
 
-### Short-Term Memory (STM)
-- **Storage**: In-memory dictionary
-- **Capacity**: ~20 messages per session
-- **Purpose**: Immediate conversation context
-
-### Episodic Memory (EpTM)
-- **Storage**: SQLite (`instance/amy_memory.db`)
-- **Features**:
-  - Session-based conversation storage
-  - Message history with timestamps
-  - Searchable by content
-- **Schema**: ADK-compatible (conversations + messages tables)
+### ConversationDB
+- **Storage**: SQLite (`instance/amy.db`)
+- **Schema**: messages table with session_id, user_id, role, content, timestamp
+- **Purpose**: Persistent conversation history
 
 ### Long-Term Memory (LTM)
 - **Storage**: mem0 with ChromaDB (`instance/mem0_storage/`)
 - **Embeddings**: HuggingFace (`all-MiniLM-L6-v2`)
-- **LLM**: Gemini for fact extraction
-- **Features**:
-  - Semantic search for relevant facts
-  - Automatic fact extraction from conversations
-  - Deduplication and relevance scoring
+- **Purpose**: Semantic fact storage and retrieval
 
-### Memory Manager
-- Orchestrates STM → EpTM → LTM flow
-- Builds context for AI responses (500 char limit)
-- Handles user session detection (new vs returning)
+### Message Flow
+1. User message stored in ConversationDB
+2. Recent messages retrieved for context
+3. LTM searched for relevant facts
+4. Gemini generates response
+5. Response stored in ConversationDB
+6. Facts extracted and stored in LTM
 
 ---
 
@@ -120,29 +90,25 @@ docs/
 
 ### Prerequisites
 ```bash
-# Python 3.11+
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Environment Setup
+### Environment
 ```bash
 # .env file
-GEMINI_API_KEY=your_gemini_api_key
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token  # For Telegram
+GEMINI_API_KEY=your_key
+TELEGRAM_BOT_TOKEN=your_token  # For Telegram
 ```
 
-### Launch Options
-
+### Launch
 ```bash
 # Telegram Bot
 ./start_telegram.sh
-# or: python scripts/run_amy_bot.py
 
-# Web Interface (ADK)
+# Web Interface
 ./start_web.sh
-# or: python scripts/run_web.py
 ```
 
 ---
@@ -150,75 +116,36 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token  # For Telegram
 ## 🧪 Testing
 
 ```bash
-# Run all tests
+# Run tests
 python -m pytest tests/
 
-# Run specific test
-python -m pytest tests/test_memory_manager.py
-
-# Verify mem0 integration
+# Verify mem0
 python scripts/verify_mem0.py
-
-# Health check
-python scripts/health_check.py
-```
-
-### Test Coverage
-- Memory system unit tests
-- Integration tests for message flow
-- Agent response tests
-
----
-
-## 🛠️ Development Tools
-
-### Memory Management
-```bash
-python scripts/management/cleanup_ltm.py      # Clean LTM
-python scripts/management/reset_amy_memory.py # Reset all memory
-python scripts/management/view_sessions.py    # View sessions
-python scripts/management/read_db.py          # Inspect database
-```
-
-### Debugging
-```bash
-python scripts/debug/memory_debugger.py       # Interactive debug
-python scripts/debug/live_memory_monitor.py   # Real-time monitor
 ```
 
 ---
 
 ## 🔧 Configuration
 
-All configuration is centralized in `amy/config.py`:
+All in `amy/config.py`:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `DEFAULT_MODEL` | `gemini-2.0-flash` | Gemini model |
-| `CONTEXT_LIMIT` | 500 | Max context chars |
-| `LTM_TEMPERATURE` | 0.1 | LTM extraction temp |
 | `EMBEDDER_MODEL` | `all-MiniLM-L6-v2` | Embedding model |
+| `LTM_TEMPERATURE` | 0.1 | LTM extraction temp |
 
 ---
 
-## 📊 Current Status
+## 📊 Status
 
 | Component | Status |
 |-----------|--------|
-| Three-tier memory | ✅ Operational |
-| mem0/ChromaDB LTM | ✅ Integrated |
+| ConversationDB | ✅ Operational |
+| LTM (mem0) | ✅ Operational |
 | Telegram bot | ✅ Working |
 | Web interface | ✅ Working |
-| Voice/multimodal | 🔄 Planned |
-
----
-
-## 📚 Further Reading
-
-- [GOALS.md](GOALS.md) - Roadmap and priorities
-- [MEMORY_SYSTEM.md](MEMORY_SYSTEM.md) - Detailed memory documentation
-- [MEMORY_DEBUG_GUIDE.md](MEMORY_DEBUG_GUIDE.md) - Debugging guide
-- [CHANGELOG.md](../CHANGELOG.md) - Version history
+| Memory tools | ✅ Working |
 
 ---
 

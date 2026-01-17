@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - Memory System Rebuild (2026-01-17)
+
+**Complete architecture teardown and rebuild:**
+
+#### Deleted (388 lines removed)
+- `session_manager.py` - In-memory only, reset on restart
+- `stm.py` - Duplicated EpTM, volatile
+- `context_builder.py` - Overcomplicated 5-layer system
+- `prompts.py` - Greeting injection hacks
+- `MemoryManager` - Unnecessary orchestration
+
+#### Added
+- `ConversationDB` - Single SQLite source of truth
+- `memory_tools.py` - ADK-style save/search tools
+- Clean 8-step message flow in bot.py
+
+#### Fixed
+- LTM search now correctly extracts from Mem0 `{'results': [...]}` format
+- All conversations persist across restarts
+- Facts properly stored and retrieved
+
+### Previous Unreleased Changes
+
 ### Added
 - **Episodic Memory System**: Complete SQLite-based implementation for conversation storage
 - **Smart Context Builder**: 500-character limit with intelligent truncation

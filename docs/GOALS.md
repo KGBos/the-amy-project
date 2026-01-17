@@ -4,10 +4,9 @@
 
 Amy is your **Proactive Multimodal Digital Twin** - an intelligent entity that:
 - **Remembers you** across all interactions
-- **Adapts to context** using sophisticated memory systems
+- **Adapts to context** using persistent memory
 - **Handles tasks** across text, voice, and future video
 - **Anticipates needs** through pattern recognition
-- **Optimizes your time** through intelligent assistance
 
 ---
 
@@ -15,23 +14,21 @@ Amy is your **Proactive Multimodal Digital Twin** - an intelligent entity that:
 
 | Component | Status |
 |-----------|--------|
-| Three-tier memory (STM + EpTM + LTM) | ✅ Operational |
-| Vector-based LTM (mem0/ChromaDB) | ✅ Integrated |
+| ConversationDB (SQLite) | ✅ Operational |
+| LTM (mem0/ChromaDB) | ✅ Operational |
+| Memory Tools | ✅ Working |
 | Telegram bot | ✅ Working |
 | Web interface (ADK) | ✅ Working |
-| Test coverage | 🔄 ~25-30% |
 
 **Architecture:**
 ```
-User Message → STM (recent context)
-           ↓
-        EpTM (SQLite sessions)
-           ↓
-        LTM (mem0 vector search)
-           ↓
-    Context Builder (500 char limit)
-           ↓
-      AI Response
+User Message → ConversationDB (persist)
+                    ↓
+              Recent context + LTM facts
+                    ↓
+              Gemini AI Response
+                    ↓
+              ConversationDB (store)
 ```
 
 ---
@@ -39,8 +36,8 @@ User Message → STM (recent context)
 ## 🚀 Current Sprint
 
 ### Priority 1: Testing & Reliability
-- [ ] Add performance tests for memory system
-- [ ] Implement system health monitoring
+- [ ] Add integration tests for new memory system
+- [ ] Performance tests for ConversationDB
 - [ ] Increase test coverage to 50%+
 
 ### Priority 2: Proactive Features
@@ -66,12 +63,10 @@ User Message → STM (recent context)
 - [ ] Reminder system with notifications
 - [ ] Task tracking and goal management
 - [ ] Pattern recognition for user behavior
-- [ ] Proactive suggestions
 
 **Integrations**
 - [ ] RESTful API endpoints
 - [ ] Mobile app support
-- [ ] Desktop app
 
 ---
 
@@ -87,22 +82,16 @@ User Message → STM (recent context)
 - [ ] Predictive modeling
 - [ ] Autonomous actions
 
-**Digital Twin Features**
-- [ ] Comprehensive user modeling
-- [ ] Behavior prediction
-- [ ] Life optimization assistance
-
 ---
 
-## 📊 Metrics Dashboard
+## 📊 Metrics
 
 | Metric | Target | Current | Status |
 |--------|--------|---------|--------|
-| Context Length | < 500 chars | 500 chars | ✅ |
-| Duplicate Facts | 0 | 0 | ✅ |
+| Persistence | 100% | 100% | ✅ |
+| LTM Retrieval | Working | Working | ✅ |
 | Error Rate | < 1% | < 1% | ✅ |
 | Response Time | < 2s | < 2s | ✅ |
-| Test Coverage | > 50% | ~25-30% | 🔄 |
 
 ---
 
