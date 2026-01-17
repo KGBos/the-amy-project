@@ -165,7 +165,7 @@ class ConversationDB:
         Format messages as a conversation string for LLM context.
         
         Args:
-            messages: List of message dicts
+            messages: List of message dicts (expected to be chronological: Oldest -> Newest)
             max_chars: Maximum characters to include
             
         Returns:
@@ -174,25 +174,33 @@ class ConversationDB:
         if not messages:
             return ""
         
-        lines = []
+        # We want to include as many recent messages as possible within max_chars.
+        # Process from Newest to Oldest to count chars, then collect valid ones.
+        valid_lines = []
         total_chars = 0
         
-        # Process in reverse to prioritize recent messages
+        # Iterate reversed (Newest First)
         for msg in reversed(messages):
             role = msg['role']
             content = msg['content']
             line = f"{role}: {content}"
             
+            # Check length + newline
             if total_chars + len(line) + 1 > max_chars:
                 break
             
-            lines.insert(0, line)
+            valid_lines.append(line)
             total_chars += len(line) + 1
-        
-        if not lines:
+            
+        if not valid_lines:
             return ""
             
-        return "Recent conversation:\n" + "\n".join(lines)
+        # valid_lines is [Newest, 2nd Newest, ...]
+        # We want to return [Oldest, ..., Newest]
+        # So reverse it back.
+        chronological_lines = reversed(valid_lines)
+            
+        return "Recent conversation:\n" + "\n".join(chronological_lines)
     
     def get_context_for_session(
         self, 

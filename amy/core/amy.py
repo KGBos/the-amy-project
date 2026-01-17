@@ -9,10 +9,12 @@ import logging
 from typing import Optional
 
 from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 
-from amy.core.agent import root_agent, get_conversation_db, get_ltm
+from amy.core.agent import create_root_agent
+from amy.memory.conversation import ConversationDB
+from amy.memory.ltm import LTM
+from amy.memory.session_service import SqliteSessionService
 
 logger = logging.getLogger(__name__)
 
@@ -27,14 +29,25 @@ class Amy:
     
     def __init__(self):
         """Initialize the brain with ADK runner."""
-        self.session_service = InMemorySessionService()
+        logger.info("Initializing Amy Brain...")
+        
+        # 1. Initialize Memory Systems (Dependencies)
+        self.db = ConversationDB()
+        self.ltm = LTM()
+        logger.info("Memory systems initialized")
+        
+        # 2. Create the Root Agent (Dependency Injection)
+        self.agent = create_root_agent(self.ltm, self.db)
+        
+        # 3. Initialize Persistence Service
+        self.session_service = SqliteSessionService(self.db)
+        
+        # 4. Initialize the Runner
         self.runner = Runner(
             app_name="amy",
-            agent=root_agent,
+            agent=self.agent,
             session_service=self.session_service,
         )
-        self.db = get_conversation_db()
-        self.ltm = get_ltm()
         logger.info("Amy initialized with ADK agent")
     
     async def chat(
@@ -60,16 +73,16 @@ class Amy:
             Amy's response text
         """
         try:
-            # Ensure session exists
-            try:
-                await self.session_service.get_session(
-                    app_name="amy",
-                    user_id=user_id or session_id,
-                    session_id=session_id
-                )
-            except Exception:
-                # Session doesn't exist, create it
-                await self.session_service.create_session(
+            # Ensure session exists (ADK requires explicit creation if not found)
+            # The SessionService.get_session will load history if it exists in DB
+            session = await self.session_service.get_session(
+                app_name="amy",
+                user_id=user_id or session_id,
+                session_id=session_id
+            )
+            
+            if session is None:
+                session = await self.session_service.create_session(
                     app_name="amy",
                     user_id=user_id or session_id,
                     session_id=session_id,
@@ -81,21 +94,26 @@ class Amy:
                     }
                 )
             
-            # Update session state with current message
-            session = await self.session_service.get_session(
-                app_name="amy",
-                user_id=user_id or session_id,
-                session_id=session_id
-            )
-            session.state['user_message'] = message
-            session.state['session_id'] = session_id
-            session.state['user_id'] = user_id
-            session.state['platform'] = platform
+            # Update session state with current message metadata
+            # This 'state' is transient in RAM during the run but helpful for our Service
+            # to know metadata (platform, user_id) when saving new messages.
+            session.state.update({
+                'user_message': message,
+                'session_id': session_id,
+                'user_id': user_id,
+                'platform': platform
+            })
             
             # Create the message content
             content = Content(parts=[Part(text=message)])
             
-            # Run the agent and collect response
+            # Run the agent!
+            # The Runner will:
+            # 1. Add 'content' to session.history
+            # 2. Run the model/agent
+            # 3. Add model response to session.history
+            # 4. Call session_service.save_session() automatically!
+            
             response_text = ""
             async for event in self.runner.run_async(
                 user_id=user_id or session_id,
@@ -104,11 +122,20 @@ class Amy:
             ):
                 if event.content and event.content.parts:
                     for part in event.content.parts:
+                        # Skip reasoning/thought parts from the Planner
+                        if getattr(part, 'thought', False):
+                            continue
+                            
                         if part.text:
                             response_text += part.text
             
-            # Update session with response for after_agent_callback
-            session.state['amy_response'] = response_text
+            # Cleanup Planner tags if they leaked
+            for tag in ['/*PLANNING*/', '/*REASONING*/', '/*ACTION*/', '/*FINAL_ANSWER*/', '/*REPLANNING*/']:
+                response_text = response_text.replace(tag, '')
+            
+            response_text = response_text.strip()
+            
+            # No sidecar logic! Agent tools handle memory now.
             
             logger.info(f"[{platform}] Processed message for {session_id}")
             return response_text or "I'm sorry, I couldn't generate a response."
@@ -116,7 +143,7 @@ class Amy:
         except Exception as e:
             logger.error(f"Error in Amy.process: {e}")
             return "I'm having trouble thinking right now. Please try again."
-    
+
     def get_memory_stats(self, session_id: str) -> dict:
         """Get memory statistics for a session."""
         return {

@@ -31,6 +31,10 @@ requests==2.32.4
 python-multipart==0.0.20
 pytest==8.2.2
 
+# Web Search
+# Web Search
+googlesearch-python==1.2.3
+
 # Vector embeddings (for future use)
 sentence-transformers==2.2.2  # For semantic embeddings
 numpy==1.24.3  # Required for embeddings
