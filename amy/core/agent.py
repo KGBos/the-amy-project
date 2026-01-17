@@ -12,8 +12,8 @@ from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
 
 from amy.config import GEMINI_API_KEY, DEFAULT_MODEL, SYSTEM_PROMPT
-from amy.features.memory.conversation_db import ConversationDB
-from amy.features.memory.ltm import LTM
+from amy.memory.conversation import ConversationDB
+from amy.memory.ltm import LTM
 from amy.tools.memory_tools import create_save_memory_tool, create_search_memory_tool
 
 logger = logging.getLogger(__name__)
