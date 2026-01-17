@@ -108,32 +108,30 @@ class LTM(BaseMemory):
             user_id: Optional user ID filter
         """
         try:
-            # Prepare filters if allowed by Mem0 search (check latest API)
-            # Basic Mem0 search signature: search(query, user_id=None, agent_id=None, run_id=None, limit=5, filters=None)
-            
             filters = {}
             if fact_type:
                 filters["type"] = fact_type
                 
-            results = self.memory.search(
+            response = self.memory.search(
                 query=query, 
                 user_id=user_id,
                 filters=filters if filters else None,
                 limit=5
             )
             
-            # Normalize results to expected format for Amy
-            # Mem0 results typically look like: [{'memory': 'text', 'metadata': {...}, 'score': 0.9}]
+            # Mem0 returns {'results': [...]} dict
+            results = response.get('results', []) if isinstance(response, dict) else response
+            
+            # Normalize results
             normalized_results = []
             for res in results:
-                # Handle different return formats (dict or object)
-                content = res.get('memory', '') if isinstance(res, dict) else getattr(res, 'memory', '')
-                metadata = res.get('metadata', {}) if isinstance(res, dict) else getattr(res, 'metadata', {})
-                score = res.get('score', 0) if isinstance(res, dict) else getattr(res, 'score', 0)
+                content = res.get('memory', '')
+                metadata = res.get('metadata', {})
+                score = res.get('score', 0)
                 
                 normalized_results.append({
                     'content': content,
-                    'type': metadata.get('type', 'unknown'),
+                    'type': metadata.get('type', 'unknown') if metadata else 'unknown',
                     'relevance_score': score,
                     'metadata': metadata
                 })

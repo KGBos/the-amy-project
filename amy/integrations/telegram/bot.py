@@ -13,12 +13,12 @@ import google.generativeai as genai
 from amy.config import (
     GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, DEFAULT_MODEL,
     DEFAULT_TEMPERATURE, DEFAULT_TOP_P, DEFAULT_TOP_K, DEFAULT_MAX_OUTPUT_TOKENS,
-    TELEGRAM_LOG_FILE
+    TELEGRAM_LOG_FILE, SYSTEM_PROMPT
 )
-from amy.core.prompts import AmyPromptBuilder
 
-# Import the memory system
-from amy.features.memory import MemoryManager
+# Import the NEW memory system
+from amy.features.memory.conversation_db import ConversationDB
+from amy.features.memory.ltm import LTM
 from amy.features.sensory.audio_transcription import AudioTranscriber
 
 # Load environment variables
@@ -29,7 +29,7 @@ if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY (or GOOGLE_API_KEY) environment variable is required")
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Initialize the model
+# Initialize the model with tools
 model = genai.GenerativeModel(DEFAULT_MODEL)
 
 # Configure logging
@@ -47,11 +47,13 @@ logger = logging.getLogger(__name__)
 if not TELEGRAM_BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
 
-# Initialize memory manager
-memory_manager = MemoryManager()
+# Initialize NEW persistent storage
+conversation_db = ConversationDB()
+ltm = LTM()
 
 # Initialize audio transcriber for voice messages
 audio_transcriber = AudioTranscriber("base")
+
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /help command."""
@@ -92,86 +94,56 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
             # If we can't notify the user, just log it
             logger.error("Failed to notify user about the error")
 
+
 async def memory_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show memory statistics."""
-    try:
-        stats = memory_manager.get_memory_stats()
-        
-        # Format the stats
-        stm_sessions = stats['stm']['active_sessions']
-        ltm_facts = stats['ltm']['fact_types']
-        episodic_sessions = stats['episodic'].get('total_sessions', 0)
-        
-        response = f"🧠 Memory Statistics:\n\n"
-        response += f"📝 STM Active Sessions: {stm_sessions}\n"
-        response += f"🧩 EpTM Total Sessions: {episodic_sessions}\n"
-        response += f"🧠 LTM Facts by Type:\n"
-        
-        for fact_type, count in ltm_facts.items():
-            response += f"  • {fact_type}: {count}\n"
-            
-        await update.message.reply_text(response)
-        
-    except Exception as e:
-        logger.error(f"Error getting memory stats: {e}")
-        await update.message.reply_text("Sorry, I couldn't retrieve memory statistics right now.")
-
-async def debug_prompt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show the current prompt structure and memory state."""
     try:
         user_id = str(update.effective_user.id)
         session_id = f"telegram_{user_id}"
         
-        # Get detailed memory state
-        memory_state = memory_manager.get_detailed_memory_state(session_id, user_id)
+        # Get stats from ConversationDB
+        message_count = conversation_db.get_message_count(session_id)
+        has_history = conversation_db.has_previous_conversations(user_id)
+        
+        response = f"🧠 Memory Statistics:\n\n"
+        response += f"� Messages in session: {message_count}\n"
+        response += f"📚 Has conversation history: {'Yes' if has_history else 'No'}\n"
+        response += f"🗄️ Database: instance/amy.db\n"
+        
+        await update.message.reply_text(response)
+        
+    except Exception as e:
+        logger.error(f"Error getting memory stats: {e}")
+        await update.message.reply_text("Sorry, I couldn't retrieve memory statistics.")
+
+async def debug_prompt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show the current prompt structure."""
+    try:
+        user_id = str(update.effective_user.id)
+        session_id = f"telegram_{user_id}"
         
         # Get current context
-        mem_context = memory_manager.get_context_for_query(session_id, "debug", user_id)
+        recent_context = conversation_db.get_context_for_session(session_id, limit=5)
+        ltm_context = ltm.build_context_from_query("debug", user_id=user_id)
         
-        # Build the system prompt
-        system_prompt = AmyPromptBuilder.get_system_prompt()
+        debug_info = f"🔍 DEBUG INFO:\n\n"
+        debug_info += f"📊 System Prompt: {len(SYSTEM_PROMPT)} chars\n"
+        debug_info += f"💬 Recent Context: {len(recent_context)} chars\n"
+        debug_info += f"🧠 LTM Context: {len(ltm_context) if ltm_context else 0} chars\n\n"
+        debug_info += f"📋 SYSTEM PROMPT:\n{SYSTEM_PROMPT}\n\n"
+        debug_info += f"💬 RECENT CONTEXT:\n{recent_context or '(empty)'}\n\n"
+        debug_info += f"🧠 LTM CONTEXT:\n{ltm_context or '(empty)'}"
         
-        # Build the full prompt
-        full_prompt = AmyPromptBuilder.build_full_prompt(
-            user_message="debug",
-            context=mem_context
-        )
-        
-        # Format the debug info
-        debug_info = f"🔍 PROMPT DEBUG INFO:\n\n"
-        debug_info += f"📊 System Prompt Length: {len(system_prompt)} chars\n"
-        debug_info += f"🧠 Context Length: {len(mem_context)} chars\n"
-        debug_info += f"📝 Total Prompt Length: {len(full_prompt)} chars\n\n"
-        
-        # Add memory state
-        debug_info += f"🧠 MEMORY STATE:\n"
-        debug_info += f"• STM Messages in Session: {memory_state['stm']['messages_in_session']}\n"
-        debug_info += f"• EpTM Messages in Session: {memory_state['episodic']['messages_in_session']}\n"
-        debug_info += f"• LTM Total Facts: {memory_state['ltm']['total_facts']}\n"
-        debug_info += f"• User Session Count: {memory_state['user_session']['session_count']}\n"
-        debug_info += f"• Is New User: {memory_state['user_session']['is_new_user']}\n\n"
-        
-        debug_info += f"📋 SYSTEM PROMPT:\n{system_prompt}\n\n"
-        
-        if mem_context:
-            debug_info += f"🧠 CONTEXT:\n{mem_context}\n\n"
-        else:
-            debug_info += f"🧠 CONTEXT: (empty)\n\n"
-            
-        debug_info += f"👤 USER MESSAGE: debug\n\n"
-        debug_info += f"🎯 FULL PROMPT:\n{full_prompt}"
-        
-        # Split into chunks if too long
+        # Split if too long
         if len(debug_info) > 4000:
-            chunks = [debug_info[i:i+4000] for i in range(0, len(debug_info), 4000)]
-            for i, chunk in enumerate(chunks):
-                await update.message.reply_text(f"Debug Info (Part {i+1}/{len(chunks)}):\n{chunk}")
+            await update.message.reply_text(debug_info[:4000] + "...(truncated)")
         else:
             await update.message.reply_text(debug_info)
             
     except Exception as e:
-        logger.error(f"Error in debug prompt command: {e}")
-        await update.message.reply_text("Sorry, I couldn't generate debug info right now.")
+        logger.error(f"Error in debug: {e}")
+        await update.message.reply_text("Sorry, debug failed.")
+
 
 async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle voice messages by transcribing them and processing as text."""
@@ -304,82 +276,57 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text("Sorry, I encountered an error processing your voice message. Please try sending it as text instead.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle incoming messages."""
+    """Handle incoming messages - SIMPLIFIED with ConversationDB."""
     if not update.message or not update.message.text:
         return
         
     user_id = str(update.effective_user.id)
     username = update.effective_user.username
-    chat_id = update.effective_chat.id
     message_text = update.message.text
     session_id = f"telegram_{user_id}"
     
-    # Log the incoming message
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    logger.info(f"--- USER MESSAGE ({timestamp}) ---")
-    logger.info(f"User ID: {user_id}, Username: {username}, Chat ID: {chat_id}")
+    # Log incoming message
+    logger.info(f"--- USER MESSAGE ---")
+    logger.info(f"User: {username} ({user_id})")
     logger.info(f"Message: {message_text}")
     
-    # Check if this is a new user/session and record it
-    is_new_user = memory_manager.is_new_user(user_id, session_id)
-    if is_new_user:
-        logger.info(f"New user/session detected: {user_id}")
-        memory_manager.record_user_session(user_id, session_id)
-    
-    # Load user-specific memory if this is a new conversation
-    if not memory_manager.stm.get_context(session_id):
-        logger.info(f"New conversation detected for user {user_id}, loading user-specific memory...")
-        memory_manager._load_previous_conversations_for_user(user_id)
-    
-    # Process the message through memory systems
-    memory_manager.process_message(
+    # 1. Store user message FIRST (persistent)
+    conversation_db.add_message(
         session_id=session_id,
-        platform="telegram",
         role="user",
         content=message_text,
         user_id=user_id,
-        username=username
+        platform="telegram"
     )
     
-    # Build context for the response
-    mem_context = memory_manager.get_context_for_query(session_id, message_text, user_id)
-    
-    # Build greeting context for new users
-    greeting_context = ""
-    if is_new_user:
-        greeting = memory_manager.get_greeting(user_id, session_id)
-        greeting_context = AmyPromptBuilder.build_greeting_context(greeting)
-    
-    # Build the full prompt with context using AmyPromptBuilder
-    full_prompt = AmyPromptBuilder.build_full_prompt(
-        user_message=message_text,
-        context=mem_context,
-        greeting_context=greeting_context
+    # 2. Build context from recent conversation
+    recent_context = conversation_db.get_context_for_session(
+        session_id, 
+        limit=10, 
+        max_chars=2000
     )
     
-    # Log the context being sent to Amy
-    logger.info("--- CONTEXT FOR AMY ---")
-    logger.info(f"Context length: {len(mem_context)} characters")
-    logger.info(f"Context: {mem_context}")
+    # 3. Get relevant facts from LTM (semantic search)
+    ltm_context = ltm.build_context_from_query(message_text, user_id=user_id)
     
-    # Log the COMPLETE PROMPT that Amy sees
-    logger.info("=" * 80)
-    logger.info("🎯 COMPLETE PROMPT SENT TO AMY")
-    logger.info("=" * 80)
-    logger.info(f"SYSTEM PROMPT:")
-    logger.info(f"{AmyPromptBuilder.get_system_prompt()}")
-    logger.info("")
-    if mem_context:
-        logger.info(f"CONTEXT:")
-        logger.info(f"{mem_context}")
-        logger.info("")
-    logger.info(f"USER MESSAGE:")
-    logger.info(f"{message_text}")
-    logger.info("")
-    logger.info(f"FULL PROMPT LENGTH: {len(full_prompt)} characters")
-    logger.info("=" * 80)
+    # 4. Build the prompt
+    prompt_parts = [SYSTEM_PROMPT]
     
-    # Generate response using Google Generative AI
+    if recent_context:
+        prompt_parts.append(f"\n{recent_context}")
+    
+    if ltm_context:
+        prompt_parts.append(f"\n{ltm_context}")
+    
+    prompt_parts.append(f"\nUser: {message_text}")
+    prompt_parts.append("Amy:")
+    
+    full_prompt = "\n".join(prompt_parts)
+    
+    logger.info(f"--- PROMPT ({len(full_prompt)} chars) ---")
+    logger.debug(f"Context: {recent_context[:200] if recent_context else 'None'}...")
+    
+    # 5. Generate response
     try:
         response = model.generate_content(
             full_prompt,
@@ -391,33 +338,40 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             )
         )
         
-        # Check if response was blocked by safety filters
         if response.candidates and response.candidates[0].finish_reason == 2:
-            amy_response = "I apologize, but I'm unable to respond to that message due to content safety filters. Could you please rephrase your message?"
+            amy_response = "I can't respond to that due to content safety. Please rephrase."
         elif response.text:
             amy_response = response.text
         else:
-            amy_response = "I'm sorry, I encountered an issue generating a response. Please try again."
+            amy_response = "I'm sorry, I couldn't generate a response."
+            
     except Exception as e:
         logger.error(f"Gemini API error: {e}")
-        amy_response = "I'm having trouble connecting to my thinking system. Please try again in a moment."
+        amy_response = "I'm having trouble thinking right now. Please try again."
     
-    # Process Amy's response through memory systems
-    memory_manager.process_message(
+    # 6. Store Amy's response (persistent)
+    conversation_db.add_message(
         session_id=session_id,
-        platform="telegram",
-        role="model",
+        role="assistant",
         content=amy_response,
         user_id=user_id,
-        username=username
+        platform="telegram"
     )
     
-    # Log Amy's response
-    logger.info(f"--- AMY RESPONSE ({timestamp}) ---")
-    logger.info(f"Response: {amy_response}")
+    # 7. Extract and store facts from conversation (async background)
+    # Simple heuristic: if user said "my name is" or "I like", extract fact
+    lower_msg = message_text.lower()
+    if any(p in lower_msg for p in ['my name is', 'i am called', 'call me']):
+        ltm.store_fact(message_text, "personal_info", user_id)
+    elif any(p in lower_msg for p in ['i like', 'i love', 'i prefer', 'my favorite']):
+        ltm.store_fact(message_text, "preference", user_id)
     
-    # Send the response
+    logger.info(f"--- AMY RESPONSE ---")
+    logger.info(f"Response: {amy_response[:200]}...")
+    
+    # 8. Send response
     await update.message.reply_text(amy_response)
+
 
 def main():
     """Start the bot."""

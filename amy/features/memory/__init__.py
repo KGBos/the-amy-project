@@ -1,21 +1,15 @@
 """
-Memory system for Amy - Sensory, STM, EpTM, and LTM implementation
+Memory system for Amy - ConversationDB and LTM
 """
 
-from .stm import ShortTermMemory
-from .ltm import LTM as LongTermMemory # Un-commented and aliased LTM
-from .episodic import EpisodicMemory
-from .memory_manager import MemoryManager # Un-commented
-from .base import BaseMemory # Un-commented
-
-# TODO: Add when implemented
-# from .sensory import SensoryMemory
+from .conversation_db import ConversationDB
+from .ltm import LTM
+from .episodic import EpisodicMemory  # Keep for backwards compat
+from .base import BaseMemory
 
 __all__ = [
-    'ShortTermMemory',
-    'LongTermMemory',
+    'ConversationDB',
+    'LTM',
     'EpisodicMemory',
-    'MemoryManager',
-    'BaseMemory', # Added back
-    # 'SensoryMemory',  # Coming soon
+    'BaseMemory',
 ]

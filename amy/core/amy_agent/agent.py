@@ -1,110 +1,130 @@
 """
 Core Agent definition for Amy.
-This agent acts as the brain, orchestrating memory and response generation.
+Uses ADK-style memory tools for explicit save/recall.
 """
 
 import os
+import logging
 from typing import AsyncGenerator, Optional
 
 import google.generativeai as genai
-from google.adk.agents import BaseAgent
-from google.adk.agents.invocation_context import InvocationContext
-from google.adk.events import Event
-from google.genai.types import Content, Part
+from google.adk.agents import Agent
+from google.adk.tools import FunctionTool
 
-from amy.config import GEMINI_API_KEY, DEFAULT_MODEL
-from amy.core.prompts import AmyPromptBuilder
-from amy.features.memory import MemoryManager
-from amy.core.agent_logger import setup_agent_logger
+from amy.config import GEMINI_API_KEY, DEFAULT_MODEL, SYSTEM_PROMPT
+from amy.features.memory.conversation_db import ConversationDB
+from amy.features.memory.ltm import LTM
+from amy.tools.memory_tools import create_save_memory_tool, create_search_memory_tool
 
-logger = setup_agent_logger(__name__)
+logger = logging.getLogger(__name__)
 
-class AmyAgent(BaseAgent):
+# Initialize persistent storage
+conversation_db = ConversationDB()
+ltm = LTM()
+
+# Create memory tools
+save_memory_tool = create_save_memory_tool(ltm)
+search_memory_tool = create_search_memory_tool(ltm)
+
+
+def before_agent_callback(callback_context):
     """
-    Amy's brain. Uses MemoryManager to provide context-aware responses.
+    Called before each agent invocation.
+    Injects recent conversation history into context.
     """
-    memory_manager: Optional[MemoryManager] = None
-    model: Optional[genai.GenerativeModel] = None
-
-    def __init__(self, name: str = "Amy", memory_manager: Optional[MemoryManager] = None):
-        super().__init__(name=name)
-        self.memory_manager = memory_manager or MemoryManager()
-        
-        # Initialize the Gemini model
-        if not GEMINI_API_KEY:
-            logger.warning("No API KEY found for Gemini. Agent may fail to generate responses.")
-        
-        genai.configure(api_key=GEMINI_API_KEY)
-        self.model = genai.GenerativeModel(DEFAULT_MODEL)
-
-    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
-        """
-        Processes a user message and returns a streamed response.
-        """
-        user_id = ctx.user_id
-        session_id = ctx.session.id
-        message = ctx.user_content
-        
-        # Fallback: Check if there are events in the session if message is None
-        if message is None and ctx.session.events:
-             user_events = [e for e in ctx.session.events if e.author == 'user' and e.content]
-             if user_events:
-                 message = user_events[-1].content
-        
-        if message is None or not message.parts:
-            yield Event(author=self.name, content=Content(parts=[Part(text="I'm sorry, I didn't receive any message.")]))
+    try:
+        # Get session_id from state
+        session_id = callback_context.state.get('session_id')
+        if not session_id:
             return
-
-        # Extract text from the message parts
-        user_text = "".join([part.text for part in message.parts if part.text])
         
-        if not user_text:
-            yield Event(author=self.name, content=Content(parts=[Part(text="I'm sorry, I didn't receive any text.")]))
-            return
+        # Get recent conversation context
+        context = conversation_db.get_context_for_session(
+            session_id, 
+            limit=10, 
+            max_chars=2000
+        )
+        
+        if context:
+            # Append to system instruction
+            callback_context.state['conversation_context'] = context
+            logger.debug(f"Injected {len(context)} chars of context")
+    except Exception as e:
+        logger.error(f"Error in before_agent_callback: {e}")
 
-        try:
-            # Process the message through memory
-            self.memory_manager.process_message(
+
+def after_agent_callback(callback_context):
+    """
+    Called after each agent invocation.
+    Stores the conversation to the database.
+    """
+    try:
+        session_id = callback_context.state.get('session_id')
+        user_id = callback_context.state.get('user_id')
+        platform = callback_context.state.get('platform', 'unknown')
+        
+        if not session_id:
+            return
+        
+        # Get the user's message and Amy's response from events
+        user_message = callback_context.state.get('user_message')
+        amy_response = callback_context.state.get('amy_response')
+        
+        if user_message:
+            conversation_db.add_message(
                 session_id=session_id,
-                platform="adk",
-                role="user",
-                content=user_text,
-                user_id=user_id
+                role='user',
+                content=user_message,
+                user_id=user_id,
+                platform=platform
             )
-            
-            # Get context for the query
-            mem_context = self.memory_manager.get_context_for_query(session_id, user_text, user_id)
-            
-            # Build the full prompt using AmyPromptBuilder
-            full_prompt = AmyPromptBuilder.build_full_prompt(
-                user_message=user_text,
-                context=mem_context
-            )
-            
-            response = self.model.generate_content(full_prompt)
-            
-            # Safer response text access with error handling
-            try:
-                amy_response = response.text or "I'm sorry, I couldn't generate a response."
-            except ValueError:
-                # Gemini raises ValueError if response was blocked by safety filters
-                amy_response = "I'm sorry, I couldn't generate a response due to content safety filters."
-                logger.warning("Response blocked by safety filters")
-            
-            # Record Amy's response
-            self.memory_manager.process_message(
+        
+        if amy_response:
+            conversation_db.add_message(
                 session_id=session_id,
-                platform="adk",
-                role="model",
+                role='assistant',
                 content=amy_response,
-                user_id=user_id
+                user_id=user_id,
+                platform=platform
             )
             
-            yield Event(author=self.name, content=Content(parts=[Part(text=amy_response)]))
-            
-        except Exception as e:
-            logger.error(f"Error in AmyAgent._run_async_impl: {e}")
-            yield Event(author=self.name, content=Content(parts=[Part(text=f"I encountered an error: {e}")]))
+        logger.debug(f"Stored conversation for session {session_id}")
+    except Exception as e:
+        logger.error(f"Error in after_agent_callback: {e}")
 
-# Create the root_agent instance
-root_agent = AmyAgent()
+
+# Build full instruction with context placeholder
+def build_instruction():
+    """Build the system instruction for Amy."""
+    return f"""{SYSTEM_PROMPT}
+
+You have two memory tools available:
+- save_memory: Save important facts about users (name, preferences, etc.)
+- search_memory: Recall information you've saved about users
+
+Use save_memory when users tell you something worth remembering.
+Use search_memory when you need to recall something about them.
+
+If conversation context is provided, use it to maintain continuity."""
+
+
+# Create the root agent
+root_agent = Agent(
+    name="amy",
+    model=DEFAULT_MODEL,
+    instruction=build_instruction(),
+    tools=[save_memory_tool, search_memory_tool],
+    before_agent_callback=before_agent_callback,
+    after_agent_callback=after_agent_callback
+)
+
+
+# Helper functions for external use
+def get_conversation_db() -> ConversationDB:
+    """Get the conversation database instance."""
+    return conversation_db
+
+
+def get_ltm() -> LTM:
+    """Get the LTM instance."""
+    return ltm
