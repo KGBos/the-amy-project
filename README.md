@@ -6,7 +6,7 @@ Amy is a personal AI assistant with a real, working memory system. The architect
 
 - **Short-Term Memory (STM):** In-memory buffer for recent conversation context.
 - **Episodic Memory (EpTM):** SQLite-backed session and message storage, with summarization and search.
-- **Long-Term Memory (LTM):** JSON-based fact storage with deduplication and context building.
+- **Long-Term Memory (LTM):** Vector-based semantic storage using **mem0** with ChromaDB and HuggingFace embeddings.
 - **MemoryManager:** Orchestrates all three layers and provides a unified interface.
 
 ```
@@ -30,10 +30,9 @@ User Message → STM (recent context)
 - Tools for memory cleanup and testing
 
 ## 🚫 What's NOT Implemented
-- No Mem0/Vector DB integration (LTM is JSON-based)
 - No Sensory Memory (audio/video) in core memory system
 - No proactive or multimodal features (yet)
-- No broken/legacy code or TODOs for EpTM
+- No reminder/notification system
 
 ## 🛠️ How to Use
 
@@ -64,12 +63,17 @@ python3 tools/management/cleanup_ltm.py
 - Proper greeting logic
 - All memory layers working and tested
 
+## 📚 Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) - System design and components
+- [Goals & Roadmap](docs/GOALS.md) - Current priorities and future plans
+- [Memory System](docs/MEMORY_SYSTEM.md) - Detailed memory documentation
+- [Changelog](docs/CHANGELOG.md) - Version history
+
 ## 📝 Contributing
-- See GOALS.md for current priorities and progress
-- See tools/testing/ for test scripts
+- See [GOALS.md](docs/GOALS.md) for current priorities
+- See `scripts/testing/` for test scripts
 
 ---
 
-**Amy is now a clean, working foundation for further development.**
-
-_Last updated: 2025-07-06_ 
+_Last updated: 2026-01-17_ 

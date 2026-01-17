@@ -53,7 +53,7 @@ class AmyPromptBuilder:
         Returns:
             Formatted greeting context
         """
-        return f"\nNote: This appears to be a new user. If they say 'hi' or similar greetings, respond with: '{greeting}'"
+        return f"\n[INSTRUCTION: This is a BRAND NEW user you have NEVER spoken to before. Your first word MUST start with 'Hi!' followed by introducing yourself. DO NOT say 'Hi again'.]"
     
     @staticmethod
     def get_system_prompt() -> str:

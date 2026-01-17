@@ -188,18 +188,23 @@ class LTM(BaseMemory):
         
         if not relevant_facts:
             return ""
-            
-        context_parts = ["Relevant information from previous conversations:"]
+        
+        # Collect actual facts first
+        fact_lines = []
         seen_facts = set()
         
         for fact in relevant_facts:
             content = fact.get('content', '')
             if content and content not in seen_facts:
                 fact_type = fact.get('type', 'general')
-                context_parts.append(f"- [{fact_type}] {content}")
+                fact_lines.append(f"- [{fact_type}] {content}")
                 seen_facts.add(content)
+        
+        # Only return header + facts if we have actual content
+        if not fact_lines:
+            return ""
             
-        return "\n".join(context_parts)
+        return "Relevant information from previous conversations:\n" + "\n".join(fact_lines)
 
     def cleanup_duplicates(self) -> int:
         """

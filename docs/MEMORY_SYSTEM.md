@@ -36,11 +36,11 @@ User Message → STM (recent context)
 
 ### **Long-Term Memory (LTM)**
 - **Purpose:** Fact extraction and semantic knowledge storage
-- **Storage:** JSON file (with deduplication)
+- **Storage:** Vector database via **mem0** (ChromaDB + HuggingFace embeddings)
 - **Features:**
+  - Semantic search for relevant facts
   - Extracts facts from user messages
-  - Deduplicates facts before storing
-  - Builds relevant context for AI responses
+  - Builds relevant context for AI responses using vector similarity
 
 ### **MemoryManager**
 - **Purpose:** Orchestrates STM, EpTM, and LTM
@@ -49,9 +49,9 @@ User Message → STM (recent context)
   - Handles session creation, message routing, and context limits
 
 ## 🚫 Not Implemented
-- No Mem0/Vector DB integration (LTM is JSON-based)
 - No Sensory Memory (audio/video) in core memory system
 - No proactive or multimodal features (yet)
+- No reminder/notification system
 
 ## 🛠️ How It Works
 1. **User sends a message**
@@ -73,7 +73,7 @@ User Message → STM (recent context)
 
 ---
 
-_Last updated: 2025-07-06_
+_Last updated: 2026-01-17_
 
 ## 🚀 Quick Start
 
@@ -140,12 +140,11 @@ The `/memory` command shows:
 ```bash
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 GOOGLE_API_KEY=your_google_api_key
-MEM0_API_KEY=your_mem0_api_key  # Coming soon
 ```
 
 ### Database Paths
-- **MTM Database**: `instance/amy_memory.db`
-- **LTM Vector DB**: `instance/vector_db/` (will migrate to Mem0)
+- **EpTM Database**: `instance/amy_memory.db`
+- **LTM Vector DB**: `instance/mem0_storage/` (ChromaDB via mem0)
 - **Logs**: `instance/amy_telegram_bot.log`
 
 ## 📁 File Structure
@@ -259,8 +258,7 @@ for role, content in conversation:
 
 ## 🚧 Upcoming Features
 
-### Mem0 Integration
-- **Semantic Search**: Advanced vector similarity search
+### Enhanced LTM Features
 - **Memory Promotion**: Intelligent fact promotion from EpTM to LTM
 - **Memory Pruning**: Automatic cleanup of irrelevant memories
 - **Memory Aging**: Time-based memory decay

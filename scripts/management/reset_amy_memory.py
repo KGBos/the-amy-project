@@ -14,8 +14,9 @@ def reset_amy_memory():
     print("🧠 Amy Memory System - Complete Reset")
     print("=" * 50)
     
-    # Get project root
-    project_root = os.path.dirname(os.path.abspath(__file__))
+    # Get project root (this file is in scripts/management/)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(script_dir))
     instance_dir = os.path.join(project_root, 'instance')
     
     print("🗑️  Removing all memory data...")
@@ -43,6 +44,14 @@ def reset_amy_memory():
     else:
         print(f"ℹ️  Vector database not found: {vector_db_path}")
     
+    # 2b. Remove mem0 storage directory
+    mem0_path = os.path.join(instance_dir, 'mem0_storage')
+    if os.path.exists(mem0_path):
+        shutil.rmtree(mem0_path)
+        print(f"✅ Removed mem0 storage: {mem0_path}")
+    else:
+        print(f"ℹ️  Mem0 storage not found: {mem0_path}")
+    
     # 3. Clear STM (Short-Term Memory) by restarting the system
     print("🧹 Short-term memory will be cleared on next restart")
     
@@ -61,7 +70,8 @@ def verify_reset():
     """Verify that the reset was successful."""
     print("\n🔍 Verifying reset...")
     
-    project_root = os.path.dirname(os.path.abspath(__file__))
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(script_dir))
     instance_dir = os.path.join(project_root, 'instance')
     
     # Check database

@@ -249,9 +249,16 @@ class EpisodicMemory:
         Returns:
             Episodic context string
         """
-        summary = self.summarize_session(session_id)
-        if summary:
-            return f"Previous conversation: {summary}"
+        messages = self.get_session_messages(session_id)
+        
+        # Only provide "Previous conversation" context if there are meaningful prior exchanges
+        # (at least 2 model responses indicates a real prior conversation, not just starting)
+        model_messages = [msg for msg in messages if msg['role'] == 'model']
+        if len(model_messages) >= 2:
+            summary = self.summarize_session(session_id)
+            if summary:
+                return f"Previous conversation: {summary}"
+        
         return ""
     
     def search_conversations(self, query: str, user_id: Optional[str] = None) -> List[Dict]:
