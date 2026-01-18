@@ -41,7 +41,7 @@ def create_save_memory_tool(ltm):
             if tool_context and hasattr(tool_context, 'state'):
                 user_id = tool_context.state.get('user_id')
             
-            result = ltm.store_fact(fact, category, user_id)
+            result = await ltm.store_fact(fact, category, user_id)
             logger.info(f"Saved memory: {fact[:50]}... (category: {category})")
             return f"✓ Remembered: {fact}"
         except Exception as e:
@@ -77,7 +77,7 @@ def create_search_memory_tool(ltm):
             if tool_context and hasattr(tool_context, 'state'):
                 user_id = tool_context.state.get('user_id')
             
-            facts = ltm.search_facts(query, user_id=user_id)
+            facts = await ltm.search_facts(query, user_id=user_id)
             
             if not facts:
                 return "No relevant memories found."

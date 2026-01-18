@@ -50,7 +50,7 @@ echo ""
 echo "✅ Setup complete! You can now:"
 echo "  • Run the Telegram bot: ./start_telegram.sh"
 echo "  • Run the web UI: ./start_web.sh"
-echo "  • View sessions: python3 view_sessions.py"
+
 echo ""
 echo "📝 Don't forget to:"
 echo "  • Create a .env file with your TELEGRAM_BOT_TOKEN"

@@ -20,7 +20,7 @@ load_dotenv()
 if os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
     os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")
 
-from amy.features.memory.ltm import LTM
+from amy.memory.ltm import LTM
 
 def test_mem0_persistence():
     print("\n--- Testing Mem0 Integration ---")

@@ -23,15 +23,4 @@ instruction: >
   Respond directly to the user's message in a conversational way, using context
   from previous conversations when relevant.
 sub_agents: []
-tools:
-  - name: load_artifacts
-  - name: get_user_choice
-  - name: save_memory
-  - name: search_memory
-  - name: code_interpreter
-  - name: web_search
-  - name: AgentTool
-    args:
-      agent:
-        config_path: ./Amy_pet.yaml
-      skip_summarization: false
+# Note: Tools are injected programmatically in agent.py to bind LTM instance

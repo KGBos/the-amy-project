@@ -92,9 +92,8 @@ def check_dependencies():
 def check_files():
     """Check if required files exist"""
     required_files = [
-        "amy/core/amy_agent/agent.py",
-        "amy/integrations/telegram/bot.py",
-        "scripts/run_web.py",
+        "amy/core/agent.py",
+        "amy/integrations/telegram.py",
         "start_telegram.sh",
         "start_web.sh"
     ]
