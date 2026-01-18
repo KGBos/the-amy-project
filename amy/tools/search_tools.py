@@ -3,6 +3,7 @@ Search Tools for Amy
 Uses duckduckgo-search for free, private web searching.
 """
 import logging
+import asyncio
 from typing import Optional
 
 from google.adk.tools import FunctionTool
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 def create_web_search_tool():
     """Create a tool for searching the web."""
 
-    def search_web(query: str, max_results: int = 5) -> str:
+    async def search_web(query: str, max_results: int = 5) -> str:
         """
         Search the web for real-time information.
         
@@ -27,8 +28,8 @@ def create_web_search_tool():
         logger.info(f"Searching web for: {query}")
         
         try:
-            # Simple text search
-            results = DDGS().text(query, max_results=max_results)
+            # Simple text search - wrapped in to_thread to prevent blocking
+            results = await asyncio.to_thread(DDGS().text, query, max_results=max_results)
             
             if not results:
                 return "No results found."

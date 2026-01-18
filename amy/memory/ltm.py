@@ -1,37 +1,30 @@
-"""
-Long-Term Memory (LTM) for Amy using Mem0
-Handles semantic search and knowledge storage using Mem0 vector database
-"""
-
+import asyncio
 import logging
 import os
-from typing import List, Dict, Optional, Tuple
+import concurrent.futures
+from typing import List, Dict, Optional
 from mem0 import Memory
-from .base import BaseMemory
 from amy.config import DEFAULT_MODEL, LTM_TEMPERATURE, EMBEDDER_MODEL
 
 logger = logging.getLogger(__name__)
 
-class LTM(BaseMemory):
+class LTM:
     """
-    Long-Term Memory (LTM) system using Mem0 for semantic knowledge storage and retrieval.
+    Long-Term Memory (LTM) management using Mem0.
+    Handles semantic storage and retrieval of user-related facts.
     """
     
     def __init__(self, vector_db_path: str = "instance/mem0_storage"):
-        """
-        Initialize LTM with Mem0.
-        
-        Args:
-            vector_db_path: Path where Mem0 should store its data (if local).
-        """
+        """Initialize LTM with Mem0."""
         self.vector_db_path = vector_db_path
-        
-        # Ensure the directory exists
         os.makedirs(self.vector_db_path, exist_ok=True)
         
-        # Configure Mem0 for local usage
-        # We explicitly set the embedder to 'huggingface' to avoid OpenAI dependency
-        # and set vector_store to 'chroma' for local file-based storage.
+        # Specialized executor for embedding generation (I/O & CPU bound)
+        # Prevents LTM from stalling the main event loop's default executor
+        self._executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=4, 
+            thread_name_prefix="ltm_worker"
+        )
         
         config = {
             "vector_store": {
@@ -58,136 +51,74 @@ class LTM(BaseMemory):
         
         try:
             self.memory = Memory.from_config(config)
-            logger.info(f"LTM initialized using Mem0 (local storage at {self.vector_db_path}, embeddings: huggingface)")
+            logger.info(f"LTM initialized using Mem0 (local storage at {self.vector_db_path})")
         except Exception as e:
             logger.error(f"Failed to initialize Mem0: {e}")
-            # Raise explicit error instead of silent failure
-            raise RuntimeError(
-                f"Failed to initialize LTM: Mem0 unavailable. "
-                f"Check that embeddings model is downloadable and config is correct. "
-                f"Original error: {e}"
-            ) 
+            raise RuntimeError(f"Failed to initialize LTM: {e}") 
+
+    def close(self):
+        """Shut down the specialized thread pool."""
+        self._executor.shutdown(wait=False)
+        logger.debug("LTM worker pool shut down")
         
-    def store_fact(self, fact_text: str, fact_type: str, user_id: Optional[str] = None) -> str:
+    async def store_fact(self, fact_text: str, fact_type: str, user_id: Optional[str] = None) -> str:
         """
-        Store a fact in LTM using Mem0.
-        
-        Args:
-            fact_text: The fact content
-            fact_type: Type of fact (personal_info, preference, etc.)
-            user_id: Optional user ID
-            
-        Returns:
-            Fact ID (or confirmation string)
+        Store a fact in Mem0 using a specialized thread pool.
         """
         try:
-            # Add metadata to the memory
             metadata = {"type": fact_type}
             
-            # Mem0.add returns a list of added memories or a dict
-            result = self.memory.add(
-                messages=fact_text, 
-                user_id=user_id, 
-                metadata=metadata
+            # Use dedicated executor for embedding/vector storage
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(
+                self._executor,
+                self.memory.add,
+                fact_text, 
+                user_id, 
+                metadata
             )
             
-            logger.debug(f"Stored fact in Mem0: {fact_text[:50]}... Result: {result}")
+            logger.debug(f"Stored fact in Mem0: {fact_text[:50]}...")
             return str(result)
             
         except Exception as e:
             logger.error(f"Error storing fact in Mem0: {e}")
             return "error"
             
-    def search_facts(self, query: str, fact_type: Optional[str] = None, user_id: Optional[str] = None) -> List[Dict]:
+    async def search_facts(self, query: str, user_id: Optional[str] = None, limit: int = 5) -> List[Dict]:
         """
-        Search for facts using Mem0 semantic search.
-        
-        Args:
-            query: Search query
-            fact_type: Optional fact type filter
-            user_id: Optional user ID filter
+        Search facts in Mem0 using a specialized thread pool.
         """
         try:
-            filters = {}
-            if fact_type:
-                filters["type"] = fact_type
-                
-            response = self.memory.search(
-                query=query, 
-                user_id=user_id,
-                filters=filters if filters else None,
-                limit=5
+            # Use dedicated executor for embedding/vector search
+            loop = asyncio.get_running_loop()
+            results = await loop.run_in_executor(
+               self._executor,
+               self.memory.search,
+               query,
+               user_id,
+               limit
             )
             
-            # Mem0 returns {'results': [...]} dict
-            results = response.get('results', []) if isinstance(response, dict) else response
-            
-            # Normalize results
-            normalized_results = []
-            for res in results:
-                content = res.get('memory', '')
-                metadata = res.get('metadata', {})
-                score = res.get('score', 0)
-                
-                normalized_results.append({
-                    'content': content,
-                    'type': metadata.get('type', 'unknown') if metadata else 'unknown',
-                    'relevance_score': score,
-                    'metadata': metadata
-                })
-                
-            return normalized_results
+            return results if results else []
             
         except Exception as e:
             logger.error(f"Error searching facts in Mem0: {e}")
             return []
             
-    def get_facts_by_type(self, fact_type: str) -> List[Dict]:
-        """
-        Retrieve facts by type.
-        Mem0 doesn't support 'get all by filter' natively without a query in some versions.
-        We will use a generic query to find relevant info or note limitation.
-        """
-        # Workaround: Search with a generic term relevant to the type
-        # Ideally Mem0 adds a .get_all(filters={...}) method.
-        # For now, we search for "everything" with the filter.
-        return self.search_facts(query="*", fact_type=fact_type)
+    async def get_facts_by_type(self, fact_type: str) -> List[Dict]:
+        """Retrieve facts by type."""
+        return await self.search_facts(query="*", fact_type=fact_type)
         
-    def extract_facts_from_conversation(self, messages: List[Dict]) -> List[Tuple[str, str]]:
+    async def build_context_from_query(self, query: str, user_id: Optional[str] = None) -> str:
         """
-        Extract potential facts from a conversation.
+        Build relevant context for a query using LTM (Non-blocking).
         """
-        facts = []
-        for message in messages:
-            content = message.get('content', '')
-            role = message.get('role', '')
-
-            if role == 'user':
-                # Simple extraction heuristics
-                lower_content = content.lower()
-                if any(p in lower_content for p in ['my name is', 'i am', 'call me']):
-                    facts.append((content, "personal_info"))
-                elif any(p in lower_content for p in ['i like', 'i love', 'i prefer']):
-                    facts.append((content, "preference"))
-                elif any(p in lower_content for p in ['i work', 'i live']):
-                    facts.append((content, "personal_info"))
-                
-                # General fallback
-                if len(facts) == 0:
-                   facts.append((content, "general"))
-                   
-        return facts
-        
-    def build_context_from_query(self, query: str, user_id: Optional[str] = None) -> str:
-        """
-        Build relevant context for a query using LTM.
-        """
-        relevant_facts = self.search_facts(query, user_id=user_id)
+        relevant_facts = await self.search_facts(query, user_id=user_id)
         
         if not relevant_facts:
             return ""
         
-        # Collect actual facts first
         fact_lines = []
         seen_facts = set()
         
@@ -198,17 +129,12 @@ class LTM(BaseMemory):
                 fact_lines.append(f"- [{fact_type}] {content}")
                 seen_facts.add(content)
         
-        # Only return header + facts if we have actual content
         if not fact_lines:
             return ""
             
         return "Relevant information from previous conversations:\n" + "\n".join(fact_lines)
 
     def cleanup_duplicates(self) -> int:
-        """
-        Clean up existing duplicate facts in the LTM.
-        Mem0 handles some deduplication internally typically.
-        """
-        # Placeholder as Mem0 manages vector store consistency
+        """Placeholder for cleanup."""
         return 0
  

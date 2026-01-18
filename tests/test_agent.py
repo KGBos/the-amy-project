@@ -13,18 +13,16 @@ class TestRootAgent:
     
     def test_agent_factory_creates_agent(self):
         """Test that the factory creates an agent with dependencies."""
-        db = ConversationDB()
         ltm = LTM()
-        agent = create_root_agent(ltm, db)
+        agent = create_root_agent(ltm)
         
         assert agent is not None
         assert agent.name == "amy_root"
     
     def test_agent_has_memory_tools(self):
         """Test that the agent has the required memory tools."""
-        db = ConversationDB()
         ltm = LTM()
-        agent = create_root_agent(ltm, db)
+        agent = create_root_agent(ltm)
         
         tool_names = [t.name for t in agent.tools]
         assert 'save_memory' in tool_names
@@ -32,17 +30,17 @@ class TestRootAgent:
     
     def test_agent_configuration(self):
         """Test that the agent has instruction configured."""
-        db = ConversationDB()
         ltm = LTM()
-        agent = create_root_agent(ltm, db)
+        agent = create_root_agent(ltm)
         
         assert callable(agent.instruction)
     
     def test_agent_uses_correct_model(self):
         """Test that the agent uses the configured model."""
         from amy.config import DEFAULT_MODEL
-        db = ConversationDB()
         ltm = LTM()
-        agent = create_root_agent(ltm, db)
+        agent = create_root_agent(ltm)
         
-        assert agent.model == DEFAULT_MODEL
+        # Handle both string and model object (for Interactions API)
+        model_name = agent.model if isinstance(agent.model, str) else agent.model.model
+        assert model_name == DEFAULT_MODEL

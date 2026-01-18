@@ -1,13 +1,14 @@
 """
 Conversation Database for Amy
-Single source of truth for all conversation persistence
+Single source of truth for all conversation persistence.
+Refactored for non-blocking I/O using aiosqlite.
 """
 
-import sqlite3
+import aiosqlite
 import logging
-import threading
-from contextlib import contextmanager
-from typing import List, Dict, Optional, Generator
+import asyncio
+import contextlib
+from typing import List, Dict, Optional, AsyncGenerator
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -15,54 +16,53 @@ logger = logging.getLogger(__name__)
 
 class ConversationDB:
     """
-    Persistent conversation storage using SQLite.
+    Persistent conversation storage using SQLite with aiosqlite for async support.
     
-    Thread-safe implementation with connection pooling to prevent
-    database lock errors and connection leaks.
+    Enables WAL mode for high concurrency between Telegram and Web UI.
     """
     
     def __init__(self, db_path: str = "instance/amy.db"):
-        """Initialize with database path."""
         self.db_path = db_path
-        self._lock = threading.Lock()
-        self._conn: Optional[sqlite3.Connection] = None
-        self._ensure_db_exists()
-        logger.info(f"ConversationDB initialized: {db_path}")
-    
-    @contextmanager
-    def _get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """
-        Get a thread-safe database connection.
-        
-        Uses a persistent connection with locking to prevent
-        concurrent access issues.
-        """
-        with self._lock:
-            if self._conn is None:
-                self._conn = sqlite3.connect(
-                    self.db_path, 
-                    check_same_thread=False,
-                    timeout=30.0
-                )
-            yield self._conn
-    
-    def close(self) -> None:
-        """Close the database connection."""
-        with self._lock:
-            if self._conn is not None:
-                self._conn.close()
-                self._conn = None
-                logger.debug("Database connection closed")
-    
-    def _ensure_db_exists(self):
-        """Create database and tables if they don't exist."""
+        self._conn: Optional[aiosqlite.Connection] = None
+        self._lock = asyncio.Lock()
+        self._ensure_dir()
+        logger.info(f"ConversationDB initialized: {self.db_path}")
+
+    def _ensure_dir(self):
+        """Ensure the database directory exists."""
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
+
+    @contextlib.asynccontextmanager
+    async def _get_connection(self) -> AsyncGenerator[aiosqlite.Connection, None]:
+        """
+        Get or reuse a persistent connection with optimized pragmas.
+        """
+        async with self._lock:
+            if self._conn is None:
+                self._conn = await aiosqlite.connect(self.db_path)
+                self._conn.row_factory = aiosqlite.Row
+                
+                # Optimize for concurrency and speed
+                await self._conn.execute("PRAGMA journal_mode=WAL")
+                await self._conn.execute("PRAGMA synchronous=NORMAL")
+                await self._conn.execute("PRAGMA busy_timeout=5000")
+                logger.debug("Database connection established and optimized")
             
+            yield self._conn
+
+    async def close(self):
+        """Close the persistent database connection."""
+        async with self._lock:
+            if self._conn:
+                await self._conn.close()
+                self._conn = None
+                logger.info("Database connection closed")
+
+    async def initialize(self):
+        """Create database and tables if they don't exist."""
+        async with self._get_connection() as conn:
             # Messages table - the core of conversation storage
-            cursor.execute("""
+            await conn.execute("""
                 CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     session_id TEXT NOT NULL,
@@ -73,23 +73,19 @@ class ConversationDB:
                     platform TEXT DEFAULT 'unknown'
                 )
             """)
-            
-            # Index for fast session lookups
-            cursor.execute("""
+            # ... and other indexes as before ...
+            await conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_messages_session 
                 ON messages(session_id, timestamp DESC)
             """)
-            
-            # Index for user lookups
-            cursor.execute("""
+            await conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_messages_user 
                 ON messages(user_id)
             """)
-            
-            conn.commit()
+            await conn.commit()
             logger.debug("Database schema verified")
     
-    def add_message(
+    async def add_message(
         self, 
         session_id: str, 
         role: str, 
@@ -98,92 +94,79 @@ class ConversationDB:
         platform: str = "unknown"
     ) -> int:
         """
-        Store a message.
-        
-        Args:
-            session_id: Unique session identifier
-            role: 'user' or 'assistant'
-            content: Message text
-            user_id: Optional user identifier
-            platform: Platform name (telegram, web, etc.)
-            
-        Returns:
-            The message ID
+        Store a message asynchronously.
         """
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
+        async with self._get_connection() as conn:
+            cursor = await conn.execute("""
                 INSERT INTO messages (session_id, user_id, role, content, platform)
                 VALUES (?, ?, ?, ?, ?)
             """, (session_id, user_id, role, content, platform))
-            conn.commit()
-            
+            await conn.commit()
             msg_id = cursor.lastrowid
             logger.debug(f"Stored message {msg_id}: {role}: {content[:50]}...")
             return msg_id
     
-    def get_recent_messages(
+    async def get_recent_messages(
         self, 
         session_id: str, 
         limit: int = 10
     ) -> List[Dict]:
         """
-        Get recent messages for a session.
-        
-        Args:
-            session_id: Session to get messages for
-            limit: Maximum number of messages to return
-            
-        Returns:
-            List of message dicts, oldest first
+        Get recent messages for a session asynchronously.
         """
-        with self._get_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            
-            # Get last N messages, then reverse to get chronological order
-            cursor.execute("""
+        async with self._get_connection() as conn:
+            async with conn.execute("""
                 SELECT id, role, content, timestamp 
                 FROM messages 
                 WHERE session_id = ?
                 ORDER BY timestamp DESC
                 LIMIT ?
-            """, (session_id, limit))
-            
-            rows = cursor.fetchall()
-            # Reverse to get chronological order
-            messages = [dict(row) for row in reversed(rows)]
-            return messages
+            """, (session_id, limit)) as cursor:
+                rows = await cursor.fetchall()
+                messages = [dict(row) for row in reversed(rows)]
+                return messages
     
-    def get_message_count(self, session_id: str) -> int:
-        """Get total message count for a session."""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
+    async def get_message_count(self, session_id: str) -> int:
+        """Get total message count for a session asynchronously."""
+        async with self._get_connection() as conn:
+            async with conn.execute("""
                 SELECT COUNT(*) FROM messages WHERE session_id = ?
-            """, (session_id,))
-            return cursor.fetchone()[0]
+            """, (session_id,)) as cursor:
+                row = await cursor.fetchone()
+                return row[0]
     
-    def get_user_sessions(self, user_id: str) -> List[str]:
-        """Get all session IDs for a user."""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
+    async def get_user_sessions(self, user_id: str) -> List[str]:
+        """Get all session IDs for a user asynchronously."""
+        async with self._get_connection() as conn:
+            async with conn.execute("""
                 SELECT DISTINCT session_id FROM messages 
                 WHERE user_id = ?
                 ORDER BY MAX(timestamp) DESC
-            """, (user_id,))
-            return [row[0] for row in cursor.fetchall()]
+            """, (user_id,)) as cursor:
+                rows = await cursor.fetchall()
+                return [row[0] for row in rows]
     
-    def has_previous_conversations(self, user_id: str) -> bool:
-        """Check if user has any previous conversations."""
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
+    async def has_previous_conversations(self, user_id: str) -> bool:
+        """Check if user has any previous conversations asynchronously."""
+        async with self._get_connection() as conn:
+            async with conn.execute("""
                 SELECT 1 FROM messages WHERE user_id = ? LIMIT 1
-            """, (user_id,))
-            return cursor.fetchone() is not None
+            """, (user_id,)) as cursor:
+                row = await cursor.fetchone()
+                return row is not None
     
+    async def get_context_for_session(
+        self, 
+        session_id: str, 
+        limit: int = 10,
+        max_chars: int = 2000
+    ) -> str:
+        """
+        Get formatted context string for a session asynchronously.
+        """
+        messages = await self.get_recent_messages(session_id, limit)
+        return self.format_for_context(messages, max_chars)
+
     def format_for_context(
         self, 
         messages: List[Dict], 
@@ -191,29 +174,19 @@ class ConversationDB:
     ) -> str:
         """
         Format messages as a conversation string for LLM context.
-        
-        Args:
-            messages: List of message dicts (expected to be chronological: Oldest -> Newest)
-            max_chars: Maximum characters to include
-            
-        Returns:
-            Formatted conversation string
+        (Synchronous helper as it only processes data in memory)
         """
         if not messages:
             return ""
         
-        # We want to include as many recent messages as possible within max_chars.
-        # Process from Newest to Oldest to count chars, then collect valid ones.
         valid_lines = []
         total_chars = 0
         
-        # Iterate reversed (Newest First)
         for msg in reversed(messages):
             role = msg['role']
             content = msg['content']
             line = f"{role}: {content}"
             
-            # Check length + newline
             if total_chars + len(line) + 1 > max_chars:
                 break
             
@@ -223,23 +196,9 @@ class ConversationDB:
         if not valid_lines:
             return ""
             
-        # valid_lines is [Newest, 2nd Newest, ...]
-        # We want to return [Oldest, ..., Newest]
-        # So reverse it back.
         chronological_lines = reversed(valid_lines)
-            
         return "Recent conversation:\n" + "\n".join(chronological_lines)
-    
-    def get_context_for_session(
-        self, 
-        session_id: str, 
-        limit: int = 10,
-        max_chars: int = 2000
-    ) -> str:
-        """
-        Get formatted context string for a session.
-        
-        Convenience method combining get_recent_messages and format_for_context.
-        """
-        messages = self.get_recent_messages(session_id, limit)
-        return self.format_for_context(messages, max_chars)
+
+    def close(self):
+        """No-op for aiosqlite as it manages connections per-context."""
+        pass

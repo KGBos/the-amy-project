@@ -1,6 +1,6 @@
-
 import pytest
 import asyncio
+import pytest_asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
 from google.genai.types import Content, Part
 from google.adk.models import LlmResponse
@@ -9,9 +9,12 @@ from amy.core.amy import Amy
 
 @pytest.fixture
 def mock_db():
-    db = MagicMock()
+    db = AsyncMock()
+    db.initialize = AsyncMock()
     db.get_recent_messages.return_value = []
     db.get_message_count.return_value = 0
+    db.add_message.return_value = 1
+    db.has_previous_conversations.return_value = False
     return db
 
 @pytest.fixture
@@ -40,15 +43,18 @@ def mock_session_service():
     service.create_session = AsyncMock()
     return service
 
-@pytest.fixture
-def amy_instance_with_mocks(mock_db, mock_ltm, mock_runner, mock_session_service):
-    # Patch dependencies - now we patch the classes directly since Amy instantiates them
+@pytest_asyncio.fixture
+async def amy_instance_with_mocks(mock_db, mock_ltm, mock_runner, mock_session_service):
+    # Patch dependencies
     with patch('amy.core.amy.ConversationDB', return_value=mock_db), \
          patch('amy.core.amy.LTM', return_value=mock_ltm), \
          patch('amy.core.amy.Runner', return_value=mock_runner), \
          patch('amy.core.amy.SqliteSessionService', return_value=mock_session_service):
         
         amy = Amy()
+        # Initialize the brain components (async)
+        await amy.initialize()
+        
         # Ensure our mock runner wrapper is used
         amy.runner = mock_runner
         

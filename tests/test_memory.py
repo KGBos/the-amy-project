@@ -14,13 +14,15 @@ from amy.memory.ltm import LTM
 class TestConversationDB:
     """Tests for ConversationDB."""
     
-    def test_add_and_retrieve_message(self):
+    @pytest.mark.asyncio
+    async def test_add_and_retrieve_message(self):
         """Test storing and retrieving messages."""
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = os.path.join(temp_dir, "test.db")
             db = ConversationDB(db_path=db_path)
+            await db.initialize()
             
-            msg_id = db.add_message(
+            msg_id = await db.add_message(
                 session_id="test_session",
                 role="user",
                 content="Hello Amy!",
@@ -30,32 +32,36 @@ class TestConversationDB:
             
             assert msg_id > 0
             
-            messages = db.get_recent_messages("test_session", limit=10)
+            messages = await db.get_recent_messages("test_session", limit=10)
             assert len(messages) == 1
             assert messages[0]['content'] == "Hello Amy!"
     
-    def test_message_count(self):
+    @pytest.mark.asyncio
+    async def test_message_count(self):
         """Test message counting."""
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = os.path.join(temp_dir, "test.db")
             db = ConversationDB(db_path=db_path)
+            await db.initialize()
             
-            db.add_message("session1", "user", "Message 1")
-            db.add_message("session1", "assistant", "Response 1")
-            db.add_message("session1", "user", "Message 2")
+            await db.add_message("session1", "user", "Message 1")
+            await db.add_message("session1", "assistant", "Response 1")
+            await db.add_message("session1", "user", "Message 2")
             
-            assert db.get_message_count("session1") == 3
+            assert await db.get_message_count("session1") == 3
     
-    def test_context_formatting(self):
+    @pytest.mark.asyncio
+    async def test_context_formatting(self):
         """Test context string generation."""
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = os.path.join(temp_dir, "test.db")
             db = ConversationDB(db_path=db_path)
+            await db.initialize()
             
-            db.add_message("session1", "user", "Hi")
-            db.add_message("session1", "assistant", "Hello!")
+            await db.add_message("session1", "user", "Hi")
+            await db.add_message("session1", "assistant", "Hello!")
             
-            context = db.get_context_for_session("session1")
+            context = await db.get_context_for_session("session1")
             assert "user:" in context
             assert "Recent conversation:" in context
 
@@ -63,7 +69,8 @@ class TestConversationDB:
 class TestLTM:
     """Tests for Long-Term Memory."""
     
-    def test_store_and_search_fact(self):
+    @pytest.mark.asyncio
+    async def test_store_and_search_fact(self):
         """Test storing and searching facts."""
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch('amy.memory.ltm.Memory') as MockMemory:
@@ -80,10 +87,10 @@ class TestLTM:
                 
                 ltm = LTM(vector_db_path=temp_dir)
                 
-                result = ltm.store_fact("User likes pizza", "preference", "user123")
+                result = await ltm.store_fact("User likes pizza", "preference", "user123")
                 assert result is not None
                 
-                facts = ltm.search_facts("What food?", user_id="user123")
+                facts = await ltm.search_facts("What food?", user_id="user123")
                 assert len(facts) > 0
 
 

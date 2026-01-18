@@ -14,5 +14,6 @@ fi
 
 # Activate and run
 source "$SCRIPT_DIR/venv/bin/activate"
-echo "Starting Amy Web Interface..."
-python -m amy.integrations.web
+echo "Starting Amy Web Interface (ADK Native)..."
+# We run adk web on the agents directory to enable discovery
+adk web "$SCRIPT_DIR/amy/core/agents" --port 8080

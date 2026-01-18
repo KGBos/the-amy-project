@@ -51,17 +51,22 @@ amy/
 ├── config.py             # Centralized configuration
 ├── core/
 │   ├── amy.py           # Amy class - unified interface
-│   ├── agent.py         # ADK Agent with memory tools
-│   └── logger.py        # Logging utilities
+│   ├── agent.py         # ADK Agent loader (loads from YAML)
+│   ├── logger.py        # Logging utilities
+│   └── agents/
+│       └── amy/
+│           └── root_agent.yaml  # YAML Agent Definition
 ├── memory/
 │   ├── conversation.py  # SQLite conversation storage
 │   ├── ltm.py           # Semantic memory (Mem0)
 │   └── base.py          # Memory interface
 ├── integrations/
 │   ├── telegram.py      # Telegram bot
-│   └── web.py           # Flask web interface
+│   └── web.py           # Legacy web (FastAPI/ADK Web)
 └── tools/
-    └── memory_tools.py  # ADK FunctionTools
+    ├── memory_tools.py  # ADK FunctionTools
+    ├── search_tools.py  # DuckDuckGo search
+    └── code_tools.py    # Python interpreter
 ```
 
 ---
@@ -111,4 +116,16 @@ python -m pytest tests/ -v
 
 ---
 
-_Last updated: 2026-01-17_
+## 🎨 ADK Visual Builder Integration
+
+The project is optimized for the **ADK Native Visual Editor**. When loading the project into the ADK dashboard (`./start_web.sh`), the following translations occur:
+
+- **Agents as Nodes**: Each YAML file in `amy/core/agents/` appears as a distinct node in the graph.
+- **Hierarchies as Connections**: Sub-agent relationships defined in YAML manifest as visual arrows between nodes.
+- **Tools as Icons**: Attached capabilities like `search_memory` or `PythonInterpreter` appear directly on the agent blocks.
+- **Workflow as Structure**: Orchestrators like `SequentialAgent` or `ParallelAgent` visually fork or sequence the control flow.
+- **Configuration as Properties**: Instructions, model types, and parameters are accessible via the side property panel upon selecting a node.
+
+---
+
+_Last updated: 2026-01-18_

@@ -5,6 +5,7 @@ This is a THIN integration layer. All AI logic is in amy.core.amy.
 """
 
 import logging
+import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -50,7 +51,8 @@ async def memory_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_id = str(update.effective_user.id)
     session_id = f"telegram_{user_id}"
     
-    stats = amy.get_memory_stats(session_id)
+    # Updated to await async stats
+    stats = await amy.get_memory_stats(session_id)
     
     response = f"🧠 Memory Statistics:\n\n"
     response += f"💬 Messages: {stats['message_count']}\n"
@@ -60,24 +62,74 @@ async def memory_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle incoming text messages."""
+    """Handle incoming text messages with streaming support."""
     if not update.message or not update.message.text:
         return
     
     user_id = str(update.effective_user.id)
+    chat_id = update.effective_chat.id
     session_id = f"telegram_{user_id}"
     message = update.message.text
     
     logger.info(f"[Telegram] {update.effective_user.username}: {message[:50]}...")
     
-    response = await amy.chat(
-        session_id=session_id,
-        message=message,
-        user_id=user_id,
-        platform="telegram"
-    )
+    # Initial placeholder message
+    placeholder = await update.message.reply_text("Thinking...")
     
-    await update.message.reply_text(response)
+    full_response = ""
+    last_update_time = time.time()
+    
+    try:
+        async for chunk in amy.chat_stream(
+            session_id=session_id,
+            message=message,
+            user_id=user_id,
+            platform="telegram"
+        ):
+            full_response += chunk
+            
+            # Brain-informed buffering: Update if we have a sentence ending or enough time passed
+            current_time = time.time()
+            should_update = False
+            
+            # 1. Time-based trigger (2 seconds for safety)
+            if current_time - last_update_time > 2.0:
+                should_update = True
+                
+            # 2. Heuristic: Update on sentence endings if at least 1.0s passed
+            elif current_time - last_update_time > 1.0:
+                if any(punct in chunk for punct in {'. ', '! ', '? ', '\n'}):
+                    should_update = True
+
+            if should_update:
+                try:
+                    await context.bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=placeholder.message_id,
+                        text=full_response + " ▌" # Add a typing cursor for smoother feel
+                    )
+                    last_update_time = current_time
+                except Exception as e:
+                    # Ignore "Message is not modified" errors from Telegram
+                    if "Message is not modified" not in str(e):
+                        logger.debug(f"Telegram edit error: {e}")
+
+        # Final update to remove the cursor and ensure full text is sent
+        try:
+            if full_response:
+                await placeholder.edit_text(full_response)
+            else:
+                await placeholder.edit_text("I'm sorry, I couldn't generate a response.")
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Final Telegram update failed: {e}")
+            
+    except Exception as e:
+        logger.error(f"Error during streaming: {e}")
+        try:
+            await placeholder.edit_text("Sorry, an error occurred while generating a response.")
+        except:
+            pass
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:

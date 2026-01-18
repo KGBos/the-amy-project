@@ -40,28 +40,61 @@ class Amy:
     """
     
     def __init__(self):
-        """Initialize the brain with ADK runner."""
-        logger.info("Initializing Amy Brain...")
+        """Initialize the brain's core components."""
+        logger.info("Setting up Amy Brain core components...")
         
         # 1. Initialize Memory Systems (Dependencies)
-        self.db = ConversationDB()
+        self.conversation_db = ConversationDB()
         self.ltm = LTM()
-        logger.info("Memory systems initialized")
+        logger.info("Memory systems instantiated")
         
         # 2. Create the Root Agent (Dependency Injection)
-        self.agent = create_root_agent(self.ltm, self.db)
+        self.root_agent = create_root_agent(self.ltm)
         
-        # 3. Initialize Persistence Service
-        self.session_service = SqliteSessionService(self.db)
-        
-        # 4. Initialize the Runner
-        self.runner = Runner(
-            app_name="amy",
-            agent=self.agent,
-            session_service=self.session_service,
-        )
-        logger.info("Amy initialized with ADK agent")
+        # Initialization state
+        self._initialized = False
+        self._init_lock = asyncio.Lock()
+        self.session_service: Optional[SqliteSessionService] = None
+        self.runner: Optional[Runner] = None
     
+    async def initialize(self):
+        """
+        Asynchronously initialize the brain components.
+        """
+        async with self._init_lock:
+            if self._initialized:
+                return
+                
+            logger.info("Initializing Amy Brain Components...")
+            try:
+                # Initialize async database
+                await self.conversation_db.initialize()
+                
+                # ADK SqliteSessionService
+                self.session_service = SqliteSessionService(self.conversation_db)
+                
+                # ADK Runner
+                self.runner = Runner(
+                    app_name="amy",
+                    agent=self.root_agent,
+                    session_service=self.session_service,
+                )
+                
+                self._initialized = True
+                logger.info("Amy initialized with ADK agent")
+            except Exception as e:
+                logger.error(f"Failed to initialize Amy components: {e}")
+                raise RuntimeError(f"Brain initialization failed: {e}")
+        
+    async def stop(self):
+        """Cleanly shut down all resources."""
+        logger.info("Closing Amy Brain resources...")
+        if self.conversation_db:
+            await self.conversation_db.close()
+        if self.ltm:
+            self.ltm.close()
+        self._initialized = False
+
     def _validate_input(self, message: str) -> None:
         """
         Validate user input before processing.
@@ -108,6 +141,7 @@ class Amy:
         )
         
         if session is None:
+            # Create session with initial state
             session = await self.session_service.create_session(
                 app_name="amy",
                 user_id=user_id,
@@ -116,23 +150,56 @@ class Amy:
                     'session_id': session_id,
                     'user_id': user_id,
                     'platform': platform,
-                    'user_message': message,
                 }
             )
-        
-        # Update session state with current message metadata
-        session.state.update({
-            'user_message': message,
-            'session_id': session_id,
-            'user_id': user_id,
-            'platform': platform
-        })
+        elif session.state.get('platform') != platform:
+            # Update platform if it changed (rare but possible)
+            session.state['platform'] = platform
         
         # Create the message content
         content = Content(parts=[Part(text=message)])
         
         # Run the agent
         response_text = ""
+        async for chunk in self.chat_stream(session_id, message, user_id, platform):
+            response_text += chunk
+        
+        return response_text
+
+    async def chat_stream(
+        self,
+        session_id: str,
+        message: str,
+        user_id: str,
+        platform: str
+    ):
+        """
+        Steam the agent's response chunk by chunk.
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        # Ensure session exists
+        session = await self.session_service.get_session(
+            app_name="amy",
+            user_id=user_id,
+            session_id=session_id
+        )
+        
+        if session is None:
+            session = await self.session_service.create_session(
+                app_name="amy",
+                user_id=user_id,
+                session_id=session_id,
+                state={
+                    'session_id': session_id,
+                    'user_id': user_id,
+                    'platform': platform,
+                }
+            )
+        
+        content = Content(parts=[Part(text=message)])
+        
         async for event in self.runner.run_async(
             user_id=user_id,
             session_id=session_id,
@@ -140,14 +207,38 @@ class Amy:
         ):
             if event.content and event.content.parts:
                 for part in event.content.parts:
-                    # Skip reasoning/thought parts from the Planner
                     if getattr(part, 'thought', False):
                         continue
                     if part.text:
-                        response_text += part.text
-        
-        return self._clean_response(response_text)
+                        clean_text = self._clean_response(part.text)
+                        if clean_text:
+                            yield clean_text
     
+    async def rewind_session(
+        self, 
+        user_id: str, 
+        session_id: str, 
+        rewind_before_invocation_id: str
+    ) -> bool:
+        """
+        Rewind a session to a previous state.
+        New in ADK v1.22.
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        try:
+            await self.runner.rewind_async(
+                user_id=user_id,
+                session_id=session_id,
+                rewind_before_invocation_id=rewind_before_invocation_id
+            )
+            logger.info(f"Rewound session {session_id} to before {rewind_before_invocation_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to rewind session {session_id}: {e}")
+            return False
+
     async def chat(
         self,
         session_id: str,
@@ -236,11 +327,16 @@ class Amy:
                           "I'm having trouble thinking right now. Please try again.")
         return "I'm having trouble thinking right now. Please try again."
 
-    def get_memory_stats(self, session_id: str) -> dict:
+    async def get_memory_stats(self, session_id: str) -> dict:
         """Get memory statistics for a session."""
+        if not self._initialized:
+            await self.initialize()
+            
+        m_count = await self.conversation_db.get_message_count(session_id)
+        has_hist = await self.conversation_db.has_previous_conversations(session_id.split('_')[-1])
         return {
-            'message_count': self.db.get_message_count(session_id),
-            'has_history': self.db.has_previous_conversations(session_id.split('_')[-1])
+            'message_count': m_count,
+            'has_history': has_hist
         }
 
 
@@ -268,8 +364,8 @@ class AmyProvider:
         """
         if cls._instance is not None:
             # Clean up resources
-            if hasattr(cls._instance, 'db') and cls._instance.db:
-                cls._instance.db.close()
+            if hasattr(cls._instance, 'conversation_db') and cls._instance.conversation_db:
+                cls._instance.conversation_db.close()
         cls._instance = None
 
 
