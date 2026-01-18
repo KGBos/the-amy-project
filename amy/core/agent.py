@@ -13,13 +13,10 @@ from google.adk.planners.plan_re_act_planner import PlanReActPlanner
 
 from amy.config import DEFAULT_MODEL
 from amy.memory.ltm import LTM
-from amy.tools.memory_tools import (
-    create_save_memory_tool,
-    create_search_memory_tool
-)
+from amy.tools.memory_tools import MemoryToolset
 from amy.tools.code_tools import create_code_interpreter_tool
 from amy.tools.search_tools import create_web_search_tool
-from amy.core.callbacks import SafetyCallback
+from amy.tools.search_tools import create_web_search_tool
 from amy.core.telemetry import get_telemetry_plugins
 
 logger = logging.getLogger(__name__)
@@ -43,44 +40,36 @@ def create_root_agent(ltm: LTM) -> Agent:
     coder_agent.tools = [create_code_interpreter_tool()]
     coder_agent.planner = planner # Needs planner to use tools
     
-    # B. Researcher Agent
-    researcher_path = os.path.join(base_dir, "recruitment", "researcher.yaml")
-    researcher_agent = load_agent_from_config(researcher_path)
-    researcher_agent.model = DEFAULT_MODEL
-    # Inject tools: Google Search + Memory Tools
-    researcher_agent.tools = [
-        create_web_search_tool(), # Native Google Grounding
-        create_save_memory_tool(ltm),
-        create_search_memory_tool(ltm)
-    ]
-    researcher_agent.planner = planner # Needs planner to use tools
+    # Init Toolsets once for all specialists
+    mem_tools = MemoryToolset(ltm)
+    
+    # B. LTM Specialist
+    ltm_path = os.path.join(base_dir, "recruitment", "ltm_specialist.yaml")
+    ltm_specialist = load_agent_from_config(ltm_path)
+    ltm_specialist.model = DEFAULT_MODEL
+    ltm_specialist.tools = [mem_tools]
+    ltm_specialist.planner = planner
+
+    # C. Web Specialist
+    web_path = os.path.join(base_dir, "recruitment", "web_specialist.yaml")
+    web_specialist = load_agent_from_config(web_path)
+    web_specialist.model = DEFAULT_MODEL
+    web_specialist.tools = [create_web_search_tool()]
+    web_specialist.planner = planner
 
     # --- 2. Create Root Router Agent ---
     root_path = os.path.join(base_dir, "root_agent.yaml")
     root_agent = load_agent_from_config(root_path)
     root_agent.model = DEFAULT_MODEL
     
-    # NEW: Restore memory tools to Root Agent to allow it to directly manage memory if needed,
-    # ensuring it can satisfy core tests while we unify instructions.
-    root_agent.tools = [
-        create_save_memory_tool(ltm),
-        create_search_memory_tool(ltm)
-    ]
+    # NEW: Root has its own memory access for quick oversight
+    root_agent.tools = [mem_tools]
     
     # 3. Assemble Team (Add Sub-Agents)
-    root_agent.sub_agents = [coder_agent, researcher_agent]
+    root_agent.sub_agents = [coder_agent, ltm_specialist, web_specialist]
     
-    # 4. Bind Global Features (Safety, Telemetry) to ALL agents
-    security = SafetyCallback()
-    
-    for ag in [root_agent, coder_agent, researcher_agent]:
-        # Ensure list initialization
-        if not ag.before_model_callback:
-            ag.before_model_callback = []
-        elif not isinstance(ag.before_model_callback, list):
-            ag.before_model_callback = [ag.before_model_callback]
-        
-        ag.before_model_callback.append(security)
+    # 4. Telemetry binding (Plugins handle safety now)
+    # The Runner will automatically apply plugins to these agents.
 
     # 5. Global Instruction (Static from YAML, wrapped in async for compatibility)
     # The Root Agent now relies on its specialized sub-agents (Researcher) 

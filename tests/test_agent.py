@@ -19,12 +19,22 @@ class TestRootAgent:
         assert agent is not None
         assert agent.name == "amy_root"
     
-    def test_agent_has_memory_tools(self):
+    @pytest.mark.asyncio
+    async def test_agent_has_memory_tools(self):
         """Test that the agent has the required memory tools."""
         ltm = LTM()
         agent = create_root_agent(ltm)
         
-        tool_names = [t.name for t in agent.tools]
+        # Resolve tools if they are toolsets
+        from google.adk.tools.base_toolset import BaseToolset
+        resolved_tools = []
+        for t in agent.tools or []:
+            if isinstance(t, BaseToolset):
+                resolved_tools.extend(await t.get_tools())
+            else:
+                resolved_tools.append(t)
+        
+        tool_names = [t.name for t in resolved_tools]
         assert 'save_memory' in tool_names
         assert 'search_memory' in tool_names
     

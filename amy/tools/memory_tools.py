@@ -1,97 +1,64 @@
 """
-Memory Tools for Amy
-ADK-style tools for explicit memory save/recall
+Unified Memory Toolset for Amy
+ADK-compliant Toolset for Long-Term Memory (Lending itself to specialists).
 """
 
 import logging
-from typing import Optional
-from google.adk.tools import FunctionTool
+from typing import Optional, List, Any, Dict
+from google.adk.tools.base_toolset import BaseToolset
+from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
+from google.adk.tools.function_tool import FunctionTool
 
 logger = logging.getLogger(__name__)
 
-
-def create_save_memory_tool(ltm):
-    """Create a save_memory tool bound to an LTM instance."""
+class MemoryToolset(BaseToolset):
+    """
+    Toolset for interacting with Amy's Long-Term Memory (LTM).
+    Can be injected into specialist agents.
+    """
     
-    async def save_memory(
-        fact: str,
-        category: str,
-        tool_context: ToolContext
-    ) -> str:
-        """Save an important fact to long-term memory.
-        
-        Use this when a user tells you something worth remembering, like:
-        - Their name, preferences, or personal details
-        - Things they like or dislike
-        - Important dates or events
-        - Work or hobby information
-        
-        Args:
-            fact: The information to remember (e.g., "User's name is Leon")
-            category: Type of information - one of: personal_info, preference, 
-                      work, hobby, relationship, general
-        
-        Returns:
-            Confirmation that the fact was saved
+    def __init__(self, ltm):
+        super().__init__()
+        self.ltm = ltm
+
+    async def get_tools(self, readonly_context: Optional[Any] = None) -> List[BaseTool]:
+        """Returns the list of tools in this toolset."""
+        return [
+            FunctionTool(func=self.save_memory),
+            FunctionTool(func=self.search_memory)
+        ]
+
+    async def save_memory(self, fact: str, category: str = "general", tool_context: Optional[ToolContext] = None) -> str:
+        """
+        Save an important fact or preference about the user to long-term memory.
         """
         try:
             # Get user_id from context if available
             user_id = None
-            if tool_context and hasattr(tool_context, 'state'):
-                user_id = tool_context.state.get('user_id')
+            if tool_context and hasattr(tool_context, '_invocation_context'):
+                user_id = tool_context._invocation_context.user_id
             
-            result = await ltm.store_fact(fact, category, user_id)
-            logger.info(f"Saved memory: {fact[:50]}... (category: {category})")
-            return f"✓ Remembered: {fact}"
+            await self.ltm.store_fact(fact, category, user_id=user_id)
+            return f"Successfully saved to memory: {fact}"
         except Exception as e:
-            logger.error(f"Failed to save memory: {e}")
+            logger.error(f"Error in save_memory tool: {e}")
             return f"Failed to save memory: {str(e)}"
-    
-    return FunctionTool(save_memory)
 
-
-def create_search_memory_tool(ltm):
-    """Create a search_memory tool bound to an LTM instance."""
-    
-    async def search_memory(
-        query: str,
-        tool_context: ToolContext
-    ) -> str:
-        """Search long-term memory for relevant information.
-        
-        Use this when you need to recall something about the user, like:
-        - What is their name?
-        - What do they like/prefer?
-        - What have they told you before?
-        
-        Args:
-            query: What to search for (e.g., "user's name", "favorite food")
-        
-        Returns:
-            Relevant memories if found, or indication that nothing was found
+    async def search_memory(self, query: str, tool_context: Optional[ToolContext] = None) -> List[str]:
+        """
+        Search long-term memory for facts, preferences, or past interactions related to the user.
         """
         try:
             # Get user_id from context if available
             user_id = None
-            if tool_context and hasattr(tool_context, 'state'):
-                user_id = tool_context.state.get('user_id')
+            if tool_context and hasattr(tool_context, '_invocation_context'):
+                user_id = tool_context._invocation_context.user_id
             
-            facts = await ltm.search_facts(query, user_id=user_id)
-            
+            facts = await self.ltm.search_facts(query, user_id=user_id)
             if not facts:
-                return "No relevant memories found."
-            
-            result_lines = ["Found in memory:"]
-            for fact in facts[:5]:  # Limit to 5 results
-                content = fact.get('content', '')
-                if content:
-                    result_lines.append(f"• {content}")
-            
-            logger.info(f"Memory search '{query}' returned {len(facts)} results")
-            return "\n".join(result_lines)
+                return ["No relevant memories found."]
+            return facts
         except Exception as e:
-            logger.error(f"Failed to search memory: {e}")
-            return f"Memory search failed: {str(e)}"
-    
-    return FunctionTool(search_memory)
+            logger.error(f"Error in search_memory tool: {e}")
+            return [f"Error searching memory: {str(e)}"]

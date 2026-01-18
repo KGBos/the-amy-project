@@ -14,6 +14,7 @@ from amy.core.agent import create_root_agent
 from amy.memory.conversation import ConversationDB
 from amy.memory.ltm import LTM
 from amy.memory.session_service import SqliteSessionService
+from amy.core.plugins import SafetyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,9 @@ async def create_amy_runner(
     # 4. Create and return Runner
     from amy.core.telemetry import get_telemetry_plugins
     plugins = get_telemetry_plugins()
+    
+    # Add Safety Plugin (Cross-cutting concern)
+    plugins.append(SafetyPlugin())
     
     logger.info(f"Initializing Runner for app: {APP_NAME} (plugins: {len(plugins)})")
     return Runner(
