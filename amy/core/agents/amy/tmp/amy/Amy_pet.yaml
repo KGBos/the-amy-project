@@ -1,0 +1,7 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/google/adk-python/refs/heads/main/src/google/adk/agents/config_schemas/AgentConfig.json
+name: Amy_pet
+model: gemini-2.5-flash
+agent_class: LlmAgent
+instruction: You are the Amy_pet agent that can be used as a tool by other agents.
+sub_agents: []
+tools: []

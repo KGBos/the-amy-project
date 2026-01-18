@@ -1,0 +1,5 @@
+agent_class: LoopAgent
+name: proactive_engine
+max_iterations: 100
+sub_agents:
+- config_path: trigger_check_agent.yaml
