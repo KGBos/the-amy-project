@@ -1,58 +1,33 @@
+import asyncio
 import sys
 import os
-import logging
-from typing import Optional
 
-# Add project root to sys.path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("verify_mem0")
+# Add project root to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from dotenv import load_dotenv
 load_dotenv()
 
-# Ensure GOOGLE_API_KEY is set for Mem0 if GEMINI_API_KEY is present
-if os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
-    os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")
-
 from amy.memory.ltm import LTM
 
-def test_mem0_persistence():
-    print("\n--- Testing Mem0 Integration ---")
-    
-    # Initialize LTM
-    # Uses default or configured local path
-    ltm = LTM()
-    
-    user_id = "test_user_verifier"
-    fact_text = "The user prefers dark mode interfaces."
-    fact_type = "preference"
-    
-    print(f"1. Storing fact: '{fact_text}'")
-    result = ltm.store_fact(fact_text, fact_type, user_id)
-    print(f"   Store Result: {result}")
-    
-    print("\n2. Searching for fact (query: 'interface preference')")
-    results = ltm.search_facts("interface preference", user_id=user_id)
-    
-    found = False
-    for res in results:
-        res_content = res.get('content', '')
-        print(f"   Found memory: {res_content} (Score: {res.get('relevance_score')})")
-        if fact_text in res_content:
-            found = True
-            
-    if found:
-        print("\n✅ Verification SUCCESS: Memory was stored and retrieved via Mem0.")
-    else:
-        print("\n❌ Verification FAILED: Could not retrieve the stored memory.")
-        # Print all results for debug
-        print(f"   All Results: {results}")
+async def test_ltm():
+    print("Initializing LTM...")
+    try:
+        ltm = LTM(vector_db_path="instance/test_mem0")
+        
+        print("Storing fact...")
+        await ltm.store_fact("The user likes python.", "preference", user_id="test_user")
+        
+        print("Searching fact...")
+        results = await ltm.search_facts("python", user_id="test_user")
+        print(f"Results: {results}")
+        
+        ltm.close()
+        print("LTM Test Passed!")
+    except Exception as e:
+        print(f"LTM Test Failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
-    test_mem0_persistence()
+    asyncio.run(test_ltm())

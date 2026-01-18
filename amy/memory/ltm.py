@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import concurrent.futures
+import functools
 from typing import List, Dict, Optional
 from mem0 import Memory
 from amy.config import DEFAULT_MODEL, LTM_TEMPERATURE, EMBEDDER_MODEL
@@ -73,10 +74,12 @@ class LTM:
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(
                 self._executor,
-                self.memory.add,
-                fact_text, 
-                user_id, 
-                metadata
+                functools.partial(
+                    self.memory.add,
+                    messages=fact_text, 
+                    user_id=user_id, 
+                    metadata=metadata
+                )
             )
             
             logger.debug(f"Stored fact in Mem0: {fact_text[:50]}...")
@@ -94,11 +97,13 @@ class LTM:
             # Use dedicated executor for embedding/vector search
             loop = asyncio.get_running_loop()
             results = await loop.run_in_executor(
-               self._executor,
-               self.memory.search,
-               query,
-               user_id=user_id,
-               limit=limit
+                self._executor,
+                functools.partial(
+                    self.memory.search,
+                    query=query,
+                    user_id=user_id,
+                    limit=limit
+                )
             )
             
             return results if results else []
