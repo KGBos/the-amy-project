@@ -74,6 +74,13 @@ MAX_SESSION_HISTORY = 50
 # LTM search result limit
 LTM_SEARCH_LIMIT = 5
 
+# LTM semantic search threshold (0.0 to 1.0)
+# Results with a score lower than this will be filtered out.
+LTM_SCORE_THRESHOLD = 0.4
+
+# Security / Privacy
+PII_REDACTION_ENABLED = True
+
 # Planner tags to strip from responses
 PLANNER_TAGS = [
     '/*PLANNING*/', 

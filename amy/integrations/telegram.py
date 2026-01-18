@@ -78,13 +78,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     logger.info(f"[Telegram] {update.effective_user.username}: {message_text[:50]}...")
     
-    # Initial placeholder message
-    placeholder = await update.message.reply_text("Thinking...")
+    # Send typing action to show user we are processing
+    from telegram.constants import ChatAction
+    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+    
+    # We will create the message object only when we have the first chunk of text
+    placeholder = None
     
     full_response = ""
     last_update_time = time.time()
     
     try:
+        # Ensure session exists (Required for ADK persistence with FKs)
+        # We try to get it, if not found (None), we create it.
+        try:
+            session = await runner.session_service.get_session(APP_NAME, user_id, session_id)
+            if not session:
+                logger.info(f"Creating new session: {session_id}")
+                await runner.session_service.create_session(APP_NAME, user_id, session_id)
+        except Exception as e:
+            logger.warning(f"Session check failed (will try to proceed): {e}")
+
         # Create Content object for ADK
         from google.genai.types import Content, Part
         message = Content(parts=[Part(text=message_text)])
@@ -94,6 +108,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             session_id=session_id,
             new_message=message,
         ):
+            # Yield to event loop to allow other tasks (like pings) to process
+            await asyncio.sleep(0)
+
             if event.content and event.content.parts:
                 for part in event.content.parts:
                     if getattr(part, 'thought', False): # Skip thoughts
@@ -114,14 +131,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                             if any(punct in part.text for punct in {'. ', '! ', '? ', '\n'}):
                                 should_update = True
 
-                        if should_update:
+                        if should_update and full_response.strip():
                             try:
-                                await context.bot.edit_message_text(
-                                    chat_id=chat_id,
-                                    message_id=placeholder.message_id,
-                                    text=full_response + " ▌" # Add a typing cursor
-                                )
+                                if placeholder is None:
+                                    # First Chunk: Reply to user
+                                    placeholder = await update.message.reply_text(full_response + " ▌")
+                                else:
+                                    # Subsequent Chunks: Edit message
+                                    await context.bot.edit_message_text(
+                                        chat_id=chat_id,
+                                        message_id=placeholder.message_id,
+                                        text=full_response + " ▌" # Add a typing cursor
+                                    )
                                 last_update_time = current_time
+                                
+                                # Renewal of typing status (it expires after 5s)
+                                await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
                             except Exception as e:
                                 # Ignore "Message is not modified" errors from Telegram
                                 if "Message is not modified" not in str(e):
@@ -130,18 +155,39 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Final update to remove the cursor and ensure full text is sent
         try:
             if full_response:
-                await placeholder.edit_text(full_response)
+                if placeholder:
+                    await placeholder.edit_text(full_response)
+                else:
+                    # If we never sent a message (short response < update interval?), send now
+                    await update.message.reply_text(full_response)
             else:
-                await placeholder.edit_text("I'm sorry, I couldn't generate a response.")
+                if placeholder:
+                    await placeholder.edit_text("I'm sorry, I couldn't generate a response.")
+                else:
+                    await update.message.reply_text("I'm sorry, I couldn't generate a response.")
         except Exception as e:
             if "Message is not modified" not in str(e):
                 logger.error(f"Final Telegram update failed: {e}")
             
     except Exception as e:
-        logger.error(f"Error during streaming: {e}")
+        # Check for specific Google API errors if possible, usually they come as google.api_core.exceptions
+        error_str = str(e)
+        if "429" in error_str or "ResourceExhausted" in error_str:
+            logger.error(f"Google API Quota Exceeded: {e}")
+            notification = "I'm currently overloaded (Quota Exceeded). Please try again in a minute."
+        elif "503" in error_str or "ServiceUnavailable" in error_str:
+            logger.error(f"Google API Service Unavailable: {e}")
+            notification = "My brain is having trouble connecting to Google. Please try again later."
+        else:
+            logger.error(f"Error during streaming: {e}")
+            notification = "Sorry, an unexpected error occurred."
+
         try:
-            await placeholder.edit_text("Sorry, an error occurred while generating a response.")
-        except:
+            if placeholder:
+                await placeholder.edit_text(notification)
+            else:
+                await update.message.reply_text(notification)
+        except Exception:
             pass
 
 

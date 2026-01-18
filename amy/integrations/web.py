@@ -1,13 +1,14 @@
 """
-Web Interface for Amy
-
-This is a THIN integration layer. All AI logic is in amy.core.brain.
-Flask app that provides a simple chat UI.
+Web Interface for Amy (FastAPI Version)
+Replaces the old Flask implementation for native async support.
 """
 
-import asyncio
 import logging
-from flask import Flask, request, jsonify, render_template_string
+import asyncio
+from typing import Optional, Dict, Any
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel
 
 from amy.config import APP_NAME
 from amy.core.factory import create_amy_runner
@@ -23,20 +24,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize brain
-# Initialize Runner (Lazy load)
-runner = None
+# Runner singleton
+_runner = None
 
 async def get_runner():
-    global runner
-    if runner is None:
-        runner = await create_amy_runner()
-    return runner
+    global _runner
+    if _runner is None:
+        _runner = await create_amy_runner()
+    return _runner
 
-# Create Flask app
-app = Flask(__name__)
+app = FastAPI(title="Amy Web Interface")
 
-# HTML template (embedded for simplicity)
+class ChatRequest(BaseModel):
+    message: str
+
+# HTML template (embedded for simplicity, same as Flask version)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -83,6 +85,7 @@ HTML_TEMPLATE = """
             border-radius: 15px;
             max-width: 80%;
             animation: fadeIn 0.3s ease;
+            white-space: pre-wrap;
         }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -209,82 +212,58 @@ HTML_TEMPLATE = """
 </html>
 """
 
-
-@app.route('/')
-def home():
+@app.get("/", response_class=HTMLResponse)
+async def home():
     """Serve the chat interface."""
-    return render_template_string(HTML_TEMPLATE)
+    return HTML_TEMPLATE
 
-
-@app.route('/chat', methods=['POST'])
-def chat():
-    """Handle chat messages."""
+@app.post("/chat")
+async def chat(request_data: ChatRequest, request: Request):
+    """Handle chat messages asynchronously."""
     try:
-        data = request.get_json()
-        message = data.get('message', '')
-        
+        message = request_data.message
         if not message:
-            return jsonify({'success': False, 'error': 'No message'})
-        
-        session_id = f"web_{request.remote_addr}"
-        user_id = request.remote_addr
+            return JSONResponse({"success": False, "error": "No message"}, status_code=400)
+            
+        # Simplified session/user management for web demo
+        user_id = request.client.host
+        session_id = f"web_{user_id.replace('.', '_')}"
         
         logger.info(f"[Web] {user_id}: {message[:50]}...")
         
-        # Run async runner in sync Flask context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            # Helper to run the agent
-            async def run_agent():
-                current_runner = await get_runner()
-                from google.genai.types import Content, Part
-                content = Content(parts=[Part(text=message)])
-                
-                response_text = ""
-                async for event in current_runner.run_async(
-                    user_id=user_id,
-                    session_id=session_id,
-                    new_message=content
-                ):
-                    if event.content and event.content.parts:
-                        for part in event.content.parts:
-                           if getattr(part, 'thought', False): continue
-                           if part.text:
-                               response_text += part.text
-                return response_text
-
-            response = loop.run_until_complete(run_agent())
-        finally:
-            loop.close()
+        runner = await get_runner()
         
-        return jsonify({'success': True, 'response': response})
+        from google.genai.types import Content, Part
+        content = Content(parts=[Part(text=message)])
+        
+        response_text = ""
+        async for event in runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=content
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if getattr(part, 'thought', False): continue
+                    if part.text:
+                        response_text += part.text
+        
+        return {"success": True, "response": response_text}
         
     except Exception as e:
-        logger.error(f"Chat error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+        logger.error(f"Chat error: {e}", exc_info=True)
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
-
-@app.route('/stats')
-def stats():
+@app.get("/stats")
+async def stats():
     """Get memory statistics."""
     try:
-    try:
-        # Limitation: With raw Runner, stats are harder to get without direct DB access.
-        # Returning dummy stats for now to prevent UI breakage.
-        return jsonify({'success': True, 'message_count': '?', 'has_history': False})
+        # Placeholder for real stats (would require runner/db access)
+        return {"success": True, "message_count": "?", "has_history": False}
     except Exception as e:
         logger.error(f"Stats error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-
-def run_web_interface(host='127.0.0.1', port=8080, debug=False):
-    """Run the web interface."""
-    print("🌐 Starting Amy Web Interface")
-    print(f"📱 Open: http://{host}:{port}")
-    print("🛑 Press Ctrl+C to stop")
-    app.run(host=host, port=port, debug=debug)
-
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 if __name__ == "__main__":
-    run_web_interface()
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8080)

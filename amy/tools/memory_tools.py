@@ -16,8 +16,8 @@ def create_save_memory_tool(ltm):
     
     async def save_memory(
         fact: str,
-        category: str = "general",
-        tool_context: ToolContext = None
+        category: str,
+        tool_context: ToolContext
     ) -> str:
         """Save an important fact to long-term memory.
         
@@ -56,7 +56,7 @@ def create_search_memory_tool(ltm):
     
     async def search_memory(
         query: str,
-        tool_context: ToolContext = None
+        tool_context: ToolContext
     ) -> str:
         """Search long-term memory for relevant information.
         

@@ -62,13 +62,11 @@ class SqliteSessionService(BaseSessionService):
                             if 'text' in p:
                                 parts.append(Part(text=p['text']))
                             elif 'function_call' in p:
-                                parts.append(Part(function_call=FunctionCall(**p['function_call'])))
-                            elif 'function_response' in p:
-                                # Note: FunctionResponse structure in ADK needs careful handling
-                                # constructing generic object for now if type not available, 
-                                # but Part expects concrete types. 
-                                # Let's assume text only + function call for this fix.
-                                pass
+                                fc_data = p['function_call']
+                                parts.append(Part(function_call=FunctionCall(
+                                    name=fc_data.get('name', 'unknown'),
+                                    args=fc_data.get('args', {})
+                                )))
                         
                         content = Content(role=c_data.get('role', 'user'), parts=parts)
                     else:
@@ -101,6 +99,8 @@ class SqliteSessionService(BaseSessionService):
             
             events.append(event)
             
+        # The user_id is already available on the Session object.
+            
         session = Session(
             id=session_id,
             app_name=app_name,
@@ -122,6 +122,8 @@ class SqliteSessionService(BaseSessionService):
         """Create a new session and persist it."""
         state = state or {}
         
+        # The user_id is already available on the Session object.
+
         # Persist to DB
         await self.db.upsert_session(session_id, app_name, user_id, state)
         
@@ -162,25 +164,30 @@ class SqliteSessionService(BaseSessionService):
             if event.content.parts:
                 text_parts = []
                 for p in event.content.parts:
-                    # Generic serialization of Part object
-                    # We manually extract known fields to ensure clean JSON
                     p_dict = {}
+                    # Prioritize text
                     if hasattr(p, 'text') and p.text:
                         p_dict['text'] = p.text
                         text_parts.append(p.text)
+                    
+                    # Handle function calls
                     if hasattr(p, 'function_call') and p.function_call:
-                         # Serialize function call
-                         p_dict['function_call'] = {
-                             "name": p.function_call.name,
-                             "args": p.function_call.args
-                         }
-                    if hasattr(p, 'function_response') and p.function_response:
-                        p_dict['function_response'] = {
-                            "name": p.function_response.name,
-                            "response": p.function_response.response
+                        fc = p.function_call
+                        p_dict['function_call'] = {
+                            "name": getattr(fc, 'name', 'unknown'),
+                            "args": getattr(fc, 'args', {})
                         }
                     
-                    event_dict["content"]["parts"].append(p_dict)
+                    # Handle function responses
+                    if hasattr(p, 'function_response') and p.function_response:
+                        fr = p.function_response
+                        p_dict['function_response'] = {
+                            "name": getattr(fr, 'name', 'unknown'),
+                            "response": getattr(fr, 'response', {})
+                        }
+                    
+                    if p_dict:
+                        event_dict["content"]["parts"].append(p_dict)
                 
                 text_content = "\n".join(text_parts).strip()
 

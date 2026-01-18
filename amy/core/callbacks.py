@@ -23,31 +23,30 @@ class SafetyCallback:
     async def __call__(self, callback_context: CallbackContext, llm_request: LlmRequest) -> Optional[LlmResponse]:
         """
         Called before the request is sent to the LLM.
-        Signature matches _SingleBeforeModelCallback: (CallbackContext, LlmRequest)
         """
-        if not llm_request.messages:
+        if not llm_request.messages or not isinstance(llm_request.messages, list):
             return None
             
-        # Check the last user message
-        # llm_request.messages is list of Content or Part
-        # We need to extract text.
-        
-        last_message = llm_request.messages[-1]
-        
-        # Simple text extraction for safety check
-        # This depends on structure of 'last_message' (usually Content object)
+        # Extract text from the last turn
+        last_turn = llm_request.messages[-1]
         content_text = ""
-        if hasattr(last_message, 'parts'):
-             for part in last_message.parts:
-                 if hasattr(part, 'text') and part.text:
-                     content_text += part.text
-        elif hasattr(last_message, 'content'):
-            content_text = str(last_message.content)
+        
+        # Use ADK native property access if available, else fallback
+        if hasattr(last_turn, 'parts') and last_turn.parts:
+            for part in last_turn.parts:
+                if hasattr(part, 'text') and part.text:
+                    content_text += part.text
+        elif hasattr(last_turn, 'text') and last_turn.text:
+            content_text = last_turn.text
         else:
-            content_text = str(last_message)
+            # Last resort: str conversion
+            content_text = str(last_turn)
+            
+        if not content_text:
+            return None
             
         for word in self.blocked_words:
-            if word in content_text.lower():
+            if word.lower() in content_text.lower():
                 logger.warning(f"Safety Guardrail triggered: Blocked '{word}'")
                 return LlmResponse(
                     text=f"I cannot fulfill this request because it contains unsafe content ('{word}').",

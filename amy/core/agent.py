@@ -60,13 +60,17 @@ def create_root_agent(ltm: LTM) -> Agent:
     root_agent = load_agent_from_config(root_path)
     root_agent.model = DEFAULT_MODEL
     
+    # NEW: Restore memory tools to Root Agent to allow it to directly manage memory if needed,
+    # ensuring it can satisfy core tests while we unify instructions.
+    root_agent.tools = [
+        create_save_memory_tool(ltm),
+        create_search_memory_tool(ltm)
+    ]
+    
     # 3. Assemble Team (Add Sub-Agents)
     root_agent.sub_agents = [coder_agent, researcher_agent]
     
-    # 4. Bind Global Features (Safety, Telemetry) to ROOT only?
-    # Or to all? Callbacks usually propagate or are agent-specific.
-    # For safety, we bind to ALL agents to ensure no one bypasses guardrails.
-    
+    # 4. Bind Global Features (Safety, Telemetry) to ALL agents
     security = SafetyCallback()
     
     for ag in [root_agent, coder_agent, researcher_agent]:
@@ -78,61 +82,17 @@ def create_root_agent(ltm: LTM) -> Agent:
         
         ag.before_model_callback.append(security)
 
-    # 5. Dynamic Root Instruction (Optional Context Injection)
-    # We keep the dynamic context injection on the Root Router so it knows context
-    # before delegating.
+    # 5. Global Instruction (Static from YAML, wrapped in async for compatibility)
+    # The Root Agent now relies on its specialized sub-agents (Researcher) 
+    # to handle complex memory retrieval, but keeps its own tools for observability.
     
     base_instruction = root_agent.instruction
-    
     async def root_instruction_provider(ctx: ReadonlyContext) -> str:
-        """
-        Dynamic instruction for Router. 
-        Injects LTM context so Router knows if it should recall memory.
-        """
-        try:
-            user_id = ctx.state.get('user_id')
-            user_message = ""
-            if ctx.user_content and ctx.user_content.parts:
-                user_message = ctx.user_content.parts[0].text or ""
-
-            # Check LTM briefly (light lookup)
-            # Or reliance on Researcher?
-            # For now, let's keep it simple: Router has context, passes it down implicitly?
-            # Actually, agents don't share instruction context automatically.
-            # Let's simple allow Router to see LTM so it can say "I know you liked X"
-            # before delegating.
-            
-            context_tasks = []
-            if user_message:
-                context_tasks.append(ltm.build_context_from_query(user_message, user_id=user_id))
-            
-            try:
-                # Circuit Breaker: Timeout LTM lookup after 2.0 seconds to prevent blocking
-                if context_tasks:
-                    context_results = await asyncio.wait_for(asyncio.gather(*context_tasks), timeout=2.0)
-                else:
-                    context_results = []
-            except asyncio.TimeoutError:
-                logger.warning("LTM context lookup timed out (exceeded 2.0s). Proceeding without memory.")
-                context_results = []
-            except Exception as e:
-                logger.error(f"LTM lookup failed: {e}")
-                context_results = []
-
-            ltm_context = context_results[0] if context_results else ""
-                
-            full_prompt = base_instruction
-            if ltm_context:
-                full_prompt += f"\n\n=== CONTEXT (Facts about User) ===\n{ltm_context}"
-            if user_message:
-                full_prompt += f"\n\nCurrent Request: {user_message}"
-                
-            return full_prompt
-
-        except Exception as e:
-            logger.error(f"Error building instruction: {e}")
-            return base_instruction
+        # Simple relay of static YAML instruction (no sidecar injection)
+        return base_instruction
 
     root_agent.instruction = root_instruction_provider
+    
+    return root_agent
     
     return root_agent
