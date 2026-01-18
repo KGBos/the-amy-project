@@ -9,7 +9,8 @@ import asyncio
 import logging
 from flask import Flask, request, jsonify, render_template_string
 
-from amy.core.amy import get_brain
+from amy.config import APP_NAME
+from amy.core.factory import create_amy_runner
 
 # Configure logging
 logging.basicConfig(
@@ -23,7 +24,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Initialize brain
-brain = get_brain()
+# Initialize Runner (Lazy load)
+runner = None
+
+async def get_runner():
+    global runner
+    if runner is None:
+        runner = await create_amy_runner()
+    return runner
 
 # Create Flask app
 app = Flask(__name__)
@@ -223,13 +231,30 @@ def chat():
         
         logger.info(f"[Web] {user_id}: {message[:50]}...")
         
-        # Run async brain.process in sync Flask context
+        # Run async runner in sync Flask context
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            response = loop.run_until_complete(
-                brain.chat(session_id, message, user_id, "web")
-            )
+            # Helper to run the agent
+            async def run_agent():
+                current_runner = await get_runner()
+                from google.genai.types import Content, Part
+                content = Content(parts=[Part(text=message)])
+                
+                response_text = ""
+                async for event in current_runner.run_async(
+                    user_id=user_id,
+                    session_id=session_id,
+                    new_message=content
+                ):
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                           if getattr(part, 'thought', False): continue
+                           if part.text:
+                               response_text += part.text
+                return response_text
+
+            response = loop.run_until_complete(run_agent())
         finally:
             loop.close()
         
@@ -244,9 +269,10 @@ def chat():
 def stats():
     """Get memory statistics."""
     try:
-        session_id = f"web_{request.remote_addr}"
-        stats = brain.get_memory_stats(session_id)
-        return jsonify({'success': True, **stats})
+    try:
+        # Limitation: With raw Runner, stats are harder to get without direct DB access.
+        # Returning dummy stats for now to prevent UI breakage.
+        return jsonify({'success': True, 'message_count': '?', 'has_history': False})
     except Exception as e:
         logger.error(f"Stats error: {e}")
         return jsonify({'success': False, 'error': str(e)})

@@ -13,11 +13,12 @@ User Message
 ┌─────────────────────────────────────────────────────────┐
 │                    Telegram Bot                         │
 │                                                         │
-│  1. conversation_db.add_message(user_msg)               │
-│  2. context = recent messages + LTM facts               │
-│  3. response = Gemini(system_prompt + context)          │
-│  4. conversation_db.add_message(response)               │
-│  5. Extract facts → LTM                                 │
+│  1. runner = create_amy_runner()                        │
+│  2. runner.run_async()                                  │
+│  3. ADK handles memory & agent execution internally     │
+│  4. Agent chooses Tools (save/search memory)            │
+│  5. Response streams back to user                       │
+│                                                         │
 └─────────────────────────────────────────────────────────┘
      │                    │
      ▼                    ▼
@@ -33,7 +34,7 @@ User Message
 
 ## 📦 Components
 
-### ConversationDB (`amy/features/memory/conversation_db.py`)
+### ConversationDB (`amy/memory/conversation.py`)
 
 Single SQLite source of truth for all conversations.
 
@@ -47,7 +48,7 @@ Single SQLite source of truth for all conversations.
 
 **Database:** `instance/amy.db`
 
-### Long-Term Memory (`amy/features/memory/ltm.py`)
+### Long-Term Memory (`amy/memory/ltm.py`)
 
 Semantic vector storage using mem0 with ChromaDB and HuggingFace embeddings.
 
@@ -79,13 +80,13 @@ python scripts/verify_mem0.py
 ## 📊 Data Flow
 
 1. **User sends message**
-2. **Store in ConversationDB** (persistent)
-3. **Get recent context** (last 10 messages)
-4. **Search LTM** for relevant facts
-5. **Build prompt** = system + context + message
+2. **ADK Runner** receives message
+3. **Session Service** loads history
+4. **Agent** constructs prompt
+5. **Agent** checks LTM (via Tools)
 6. **Gemini generates response**
-7. **Store response** in ConversationDB
-8. **Extract facts** → store in LTM
+7. **Session Service** saves interaction
+8. **Agent** may save new facts (via Tools)
 
 ## ❌ Removed Components
 

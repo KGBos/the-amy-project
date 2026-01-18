@@ -53,7 +53,8 @@ class LTM:
             self.memory = Memory.from_config(config)
             logger.info(f"LTM initialized using Mem0 (local storage at {self.vector_db_path})")
         except Exception as e:
-            logger.error(f"Failed to initialize Mem0: {e}")
+            import traceback
+            logger.error(f"Failed to initialize Mem0: {e}\n{traceback.format_exc()}")
             raise RuntimeError(f"Failed to initialize LTM: {e}") 
 
     def close(self):
@@ -96,8 +97,8 @@ class LTM:
                self._executor,
                self.memory.search,
                query,
-               user_id,
-               limit
+               user_id=user_id,
+               limit=limit
             )
             
             return results if results else []

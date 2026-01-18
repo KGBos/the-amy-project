@@ -12,12 +12,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Core exports
-from .core.amy import Amy, get_brain
+from .core.factory import create_amy_runner
 from .memory import ConversationDB, LTM
 
 __all__ = [
-    'Amy',
-    'get_brain',
+    'create_amy_runner',
     'ConversationDB',
     'LTM',
 ]

@@ -32,21 +32,21 @@ User Message → ConversationDB (persistent storage)
 ### Run the Bot
 ```bash
 ./start_telegram.sh
-# or: python scripts/run_amy_bot.py
 ```
 
 ### Run Web Interface
 ```bash
 ./start_web.sh
-# or: python scripts/run_web.py
 ```
 
 ## 📁 Key Files
 
 ```
-amy/
-├── features/memory/
-│   ├── conversation_db.py   # SQLite conversation storage
+├── core/
+│   ├── factory.py           # Runner Factory
+│   └── agent.py             # ADK Agent loader
+├── memory/
+│   ├── conversation.py      # SQLite conversation storage
 │   └── ltm.py               # Long-term memory (mem0)
 ├── tools/
 │   └── memory_tools.py      # ADK memory tools

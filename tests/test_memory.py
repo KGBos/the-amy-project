@@ -94,34 +94,4 @@ class TestLTM:
                 assert len(facts) > 0
 
 
-class TestAmy:
-    """Tests for Amy class."""
-    
-    def test_get_brain_returns_amy(self):
-        """Test that get_brain returns an Amy instance."""
-        from amy.core.amy import Amy, get_brain
-        amy = get_brain()
-        assert isinstance(amy, Amy)
-    
-    @pytest.mark.asyncio
-    async def test_chat_returns_response(self):
-        """Test that amy.chat returns a response string."""
-        from amy.core.amy import Amy
-        
-        with patch('amy.core.amy.Runner') as MockRunner:
-            mock_runner = MagicMock()
-            
-            async def mock_run_async(*args, **kwargs):
-                event = MagicMock()
-                event.content = MagicMock()
-                event.content.parts = [MagicMock(text="Hello!")]
-                yield event
-            
-            mock_runner.run_async = mock_run_async
-            MockRunner.return_value = mock_runner
-            
-            amy = Amy()
-            response = await amy.chat("test", "Hi", "user", "test")
-            
-            assert isinstance(response, str)
-            assert len(response) > 0
+

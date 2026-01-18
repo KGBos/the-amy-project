@@ -13,6 +13,10 @@ load_dotenv()
 # API Configuration
 # =============================================================================
 
+# Application Name
+APP_NAME = "amy"
+# =============================================================================
+
 # API Keys (from environment)
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -83,14 +87,4 @@ PLANNER_TAGS = [
 # System Prompts
 # =============================================================================
 
-SYSTEM_PROMPT = (
-    "You are Amy, a helpful and friendly AI assistant with memory. "
-    "You can remember past conversations and learn about users over time.\n\n"
-    "IMPORTANT - Memory Management:\n"
-    "- When users share important personal information (name, preferences, facts about themselves), "
-    "use the 'save_memory' tool to store it for future conversations.\n"
-    "- Before answering questions about the user, use the 'search_memory' tool to check if you have relevant stored information.\n"
-    "- Always keep track of important details to provide a personalized experience.\n\n"
-    "Respond directly to the user's message in a conversational way, "
-    "using context from previous conversations when relevant."
-)
+

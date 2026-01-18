@@ -9,8 +9,8 @@ import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-from amy.config import TELEGRAM_BOT_TOKEN, TELEGRAM_LOG_FILE
-from amy.core.amy import get_brain
+from amy.config import TELEGRAM_BOT_TOKEN, TELEGRAM_LOG_FILE, APP_NAME
+from amy.core.factory import create_amy_runner
 
 # Configure logging
 logging.basicConfig(
@@ -27,8 +27,15 @@ logger = logging.getLogger(__name__)
 if not TELEGRAM_BOT_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
 
-# Initialize Amy
-amy = get_brain()
+# Initialize Amy Runner
+runner = None
+
+async def init_runner():
+    """Initialize the global runner instance."""
+    global runner
+    if runner is None:
+        runner = await create_amy_runner()
+
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -48,17 +55,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def memory_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show memory statistics."""
-    user_id = str(update.effective_user.id)
-    session_id = f"telegram_{user_id}"
-    
-    # Updated to await async stats
-    stats = await amy.get_memory_stats(session_id)
-    
-    response = f"🧠 Memory Statistics:\n\n"
-    response += f"💬 Messages: {stats['message_count']}\n"
-    response += f"📚 History: {'Yes' if stats['has_history'] else 'No'}\n"
-    
-    await update.message.reply_text(response)
+    # Limitation: With raw Runner, accessing stats requires direct DB access not exposed on Runner.
+    # This command is temporarily disabled in strict ADK mode or needs DB access.
+    await update.message.reply_text("Memory stats unavailable in strict ADK mode.")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -69,9 +68,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_id = str(update.effective_user.id)
     chat_id = update.effective_chat.id
     session_id = f"telegram_{user_id}"
-    message = update.message.text
+    if runner is None:
+        await init_runner()
+
+    user_id = str(update.effective_user.id)
+    chat_id = update.effective_chat.id
+    session_id = f"telegram_{user_id}"
+    message_text = update.message.text
     
-    logger.info(f"[Telegram] {update.effective_user.username}: {message[:50]}...")
+    logger.info(f"[Telegram] {update.effective_user.username}: {message_text[:50]}...")
     
     # Initial placeholder message
     placeholder = await update.message.reply_text("Thinking...")
@@ -80,39 +85,47 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     last_update_time = time.time()
     
     try:
-        async for chunk in amy.chat_stream(
-            session_id=session_id,
-            message=message,
-            user_id=user_id,
-            platform="telegram"
-        ):
-            full_response += chunk
-            
-            # Brain-informed buffering: Update if we have a sentence ending or enough time passed
-            current_time = time.time()
-            should_update = False
-            
-            # 1. Time-based trigger (2 seconds for safety)
-            if current_time - last_update_time > 2.0:
-                should_update = True
-                
-            # 2. Heuristic: Update on sentence endings if at least 1.0s passed
-            elif current_time - last_update_time > 1.0:
-                if any(punct in chunk for punct in {'. ', '! ', '? ', '\n'}):
-                    should_update = True
+        # Create Content object for ADK
+        from google.genai.types import Content, Part
+        message = Content(parts=[Part(text=message_text)])
 
-            if should_update:
-                try:
-                    await context.bot.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=placeholder.message_id,
-                        text=full_response + " ▌" # Add a typing cursor for smoother feel
-                    )
-                    last_update_time = current_time
-                except Exception as e:
-                    # Ignore "Message is not modified" errors from Telegram
-                    if "Message is not modified" not in str(e):
-                        logger.debug(f"Telegram edit error: {e}")
+        async for event in runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=message,
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if getattr(part, 'thought', False): # Skip thoughts
+                        continue
+                    if part.text:
+                        full_response += part.text
+            
+                        # Brain-informed buffering: Update if we have a sentence ending or enough time passed
+                        current_time = time.time()
+                        should_update = False
+                        
+                        # 1. Time-based trigger (2 seconds for safety)
+                        if current_time - last_update_time > 2.0:
+                            should_update = True
+                            
+                        # 2. Heuristic: Update on sentence endings if at least 1.0s passed
+                        elif current_time - last_update_time > 1.0:
+                            if any(punct in part.text for punct in {'. ', '! ', '? ', '\n'}):
+                                should_update = True
+
+                        if should_update:
+                            try:
+                                await context.bot.edit_message_text(
+                                    chat_id=chat_id,
+                                    message_id=placeholder.message_id,
+                                    text=full_response + " ▌" # Add a typing cursor
+                                )
+                                last_update_time = current_time
+                            except Exception as e:
+                                # Ignore "Message is not modified" errors from Telegram
+                                if "Message is not modified" not in str(e):
+                                    logger.debug(f"Telegram edit error: {e}")
 
         # Final update to remove the cursor and ensure full text is sent
         try:

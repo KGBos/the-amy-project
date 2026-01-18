@@ -2,11 +2,10 @@
 Amy Core - Agent and unified interface
 """
 
-from .amy import Amy, get_brain
+from .factory import create_amy_runner
 from .agent import create_root_agent
 
 __all__ = [
-    'Amy',
-    'get_brain',
+    'create_amy_runner',
     'create_root_agent',
 ]

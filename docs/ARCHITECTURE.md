@@ -23,11 +23,12 @@ Amy is a personal AI assistant with persistent memory. Built with a clean, layer
 ┌─────────────────────────────────────────────────────────────────┐
 │                           AMY CORE                               │
 │  ┌─────────────────────────────────────────────────────────────┐│
-│  │  Amy (core/amy.py)                                          ││
-│  │  └── Wraps ADK Agent (root_agent)                          ││
-│  │      └── Memory Tools: save_memory, search_memory          ││
+│  │  Factory (core/factory.py)                                  ││
+│  │  └── Creates ADK Runner                                     ││
+│  │      └── Injects Memory Dependencies                        ││
 │  │                                                             ││
-│  │  Single method: amy.chat(session_id, message) → str        ││
+│  │  Runner (google.adk.runners.Runner)                         ││
+│  │  └── Executes Agent loop                                    ││
 │  └─────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
             │                                │
@@ -50,7 +51,7 @@ Amy is a personal AI assistant with persistent memory. Built with a clean, layer
 amy/
 ├── config.py             # Centralized configuration
 ├── core/
-│   ├── amy.py           # Amy class - unified interface
+│   ├── factory.py       # Runner Factory
 │   ├── agent.py         # ADK Agent loader (loads from YAML)
 │   ├── logger.py        # Logging utilities
 │   └── agents/
@@ -75,11 +76,22 @@ amy/
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| **ConversationDB** | SQLite | Persistent message storage |
-| **LTM** | Mem0 + ChromaDB | Semantic fact retrieval |
+| **ConversationDB** | SQLite + `aiosqlite` | Async persistent message storage (WAL mode) |
+| **LTM** | Mem0 + ChromaDB | Semantic fact retrieval (ThreadPool managed) |
 | **Memory Tools** | ADK FunctionTool | Agent-callable save/search |
 
 ---
+
+## 📡 Telemetry & Observability
+
+- **Freeplay**: Integration with Freeplay for LLM tracing and evaluation. 
+  - Configured in `amy/core/telemetry.py`.
+  - Requires `FREEPLAY_API_KEY`.
+
+## 🎙️ Audio Capabilities
+
+- **Whisper**: Local audio transcription support using `openai-whisper`.
+
 
 ## 🚀 Running Amy
 
